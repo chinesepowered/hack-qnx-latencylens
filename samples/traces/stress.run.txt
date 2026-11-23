@@ -1,0 +1,8 @@
+sensor_ist: adc_ist priority 60, video_enc priority 50, cpu 1
+adc_ist: 9212 interrupts serviced, worst gap between services 7.57 ms (nominal 1.95 ms)
+brakesim: protocol=PTHREAD_PRIO_NONE
+brake_ctl: 900 jobs, 206 deadline misses (deadline 15.0 ms), worst response 51.40 ms
+send_chain: fast=1 cpu=1 hmi priority 55
+hmi: 17950 route requests, average round trip 0.44 ms, worst 6.94 ms
+-rw-r--r--  2 root root 49285275 2026-11-23 19:19 /dev/shmem/stress.kev
+workload exit status: 0

@@ -1,0 +1,4 @@
+brakesim: protocol=PTHREAD_PRIO_INHERIT
+brake_ctl: 150 jobs, 0 deadline misses (deadline 15.0 ms), worst response 5.14 ms
+-rw-r--r--  2 root root 767324 2026-11-23 19:16 /dev/shmem/inversion-fixed.kev
+workload exit status: 0

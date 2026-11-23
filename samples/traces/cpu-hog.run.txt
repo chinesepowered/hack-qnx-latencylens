@@ -1,0 +1,5 @@
+cpu_hog: cpu 0
+can_rx: 300 jobs, 254 finished after their period
+sensor_poll: 600 jobs, 537 finished after their period
+-rw-r--r--  2 root root 786668 2026-11-23 19:17 /dev/shmem/cpu-hog.kev
+workload exit status: 0

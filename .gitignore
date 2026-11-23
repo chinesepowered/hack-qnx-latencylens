@@ -1,0 +1,31 @@
+# Secrets: never commit
+.env
+.env.*
+!.env.example
+
+# QNX SDP material and license keys must never be committed
+qnx800/
+qnxinstall/
+*.qlic
+*license*.key
+.qnx/
+
+# Build output
+node_modules/
+dist/
+build/
+out/
+*.tsbuildinfo
+coverage/
+
+# QEMU images and per-run scratch
+*.img
+*.qcow2
+qemu-run/
+local/
+
+# Editors and OS
+.DS_Store
+*.swp
+.vscode/*
+!.vscode/extensions.json

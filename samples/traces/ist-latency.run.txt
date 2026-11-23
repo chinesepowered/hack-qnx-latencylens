@@ -1,0 +1,4 @@
+sensor_ist: adc_ist priority 40, video_enc priority 50, cpu 0
+adc_ist: 1289 interrupts serviced, worst gap between services 12.64 ms (nominal 1.95 ms)
+-rw-r--r--  2 root root 998228 2026-11-23 19:17 /dev/shmem/ist-latency.kev
+workload exit status: 0

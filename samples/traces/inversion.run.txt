@@ -1,0 +1,4 @@
+brakesim: protocol=PTHREAD_PRIO_NONE
+brake_ctl: 150 jobs, 35 deadline misses (deadline 15.0 ms), worst response 37.66 ms
+-rw-r--r--  2 root root 757504 2026-11-23 19:16 /dev/shmem/inversion.kev
+workload exit status: 1

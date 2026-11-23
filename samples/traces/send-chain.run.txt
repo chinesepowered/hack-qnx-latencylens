@@ -1,0 +1,4 @@
+send_chain: fast=0 cpu=1 hmi priority 20
+hmi: 59 route requests, average round trip 15.24 ms, worst 33.10 ms
+-rw-r--r--  2 root root 936146 2026-11-23 19:17 /dev/shmem/send-chain.kev
+workload exit status: 0
