@@ -3,6 +3,39 @@
 Decisions and problems, newest first. Everything here happened in one cloud session on an x86_64
 Linux container (4 vCPUs, no KVM) with QNX SDP 8.0 installed through the QNX Software Center CLI.
 
+## 2026-11-23: detectors, and what real traces taught them
+
+- **Mutex holder from the owner word.** `SyncMutexLock` enter logs the mutex's owner word; on 8.0 it
+  is `((pid & 0x7fff) << 16) | tid` with bit 31 set when there are waiters. The holder's own
+  `SyncMutexUnlock` confirms it. Condvar waiters re-acquire their mutex inside the kernel (no
+  `SyncMutexLock`), so the mutex address comes from `SyncCondvarWait`.
+- **Message matching.** rcvids are local to the server process: keying by rcvid alone mixed up
+  map_db's and nav_server's requests. Now keyed by (server pid, rcvid), oldest first. `info->pid/tid`
+  in the `MsgReceive` exit are 0 when the server passes no info buffer (our samples, and many real
+  servers), so they are only used when non-zero. A client that leaves SEND/REPLY without being
+  received or replied to (timeout, unblock) closes its transaction, otherwise the next request on the
+  same rcvid matched the abandoned one (that produced a phantom 1 s "deadlock" in the USB stack).
+- **Deferred replies end a chain.** procnto keeps the rcvid of a `waitpid()` and replies when the
+  child exits; between its `MsgReceive` calls it serves others. A REPLY-blocked client waits on the
+  server thread only until that thread calls `MsgReceive` again.
+- **Chains are reported from 3 occurrences per client** (`chain_min_count`). Every trace has one-off
+  chains while programs start (procnto loading an executable from devb-eide). They are listed in the
+  report's notes, not hidden.
+- **IST bindings.** procnto's clock ISTs attach with `_NTO_INTR_FLAGS_CPU_LOCAL` (0x80): only
+  deliveries on their own CPU count. A sample counts only if the delivery actually woke the IST
+  (within 200 us), and inference of IST bindings skips kernel threads.
+- **Platform latency is not blamed on threads.** Under strict priority scheduling a lower-priority
+  thread cannot keep a higher-priority one off the same CPU. When a ready IST or job "waited" while
+  only lower-priority threads (or nothing) ran, the delay is outside the schedule (an emulator stall
+  here). Those cases are notes, and the deadline detector names a late timer that starts a backlog.
+- **The detectors found three design flaws in my own first baseline**, which is now fixed:
+  the IST ran on CPU 1 while the RTC interrupt is delivered on CPU 0 (every wakeup needed an IPI,
+  up to 3.1 ms under TCG); the IST at 70 queued behind the samples' main threads, also at 70
+  (equal-priority FIFO); and hmi at 55 delayed io-sock's network IST at 21. The baseline now runs the
+  IST at 75 on CPU 0 and hmi at 20. One capture in between hit a 44.5 ms timer stall of the emulator;
+  the detector traced brake_ctl's three misses to it and said so.
+- Analysis of the 20k to 63k event sample traces takes 40 to 170 ms in total (parse, model, detect).
+
 ## 2026-11-23: million-event stress trace
 
 - `samples/target/run-stress.sh` runs the inversion, the IST and a 1 ms request loop through the server

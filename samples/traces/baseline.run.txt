@@ -1,8 +1,8 @@
-sensor_ist: adc_ist priority 60, video_enc priority 50, cpu 1
-adc_ist: 1568 interrupts serviced, worst gap between services 7.06 ms (nominal 1.95 ms)
+sensor_ist: adc_ist priority 75, video_enc priority 50, cpu 0
+adc_ist: 1576 interrupts serviced, worst gap between services 6.42 ms (nominal 1.95 ms)
 brakesim: protocol=PTHREAD_PRIO_INHERIT
-brake_ctl: 150 jobs, 0 deadline misses (deadline 15.0 ms), worst response 3.14 ms
-send_chain: fast=1 cpu=1 hmi priority 55
-hmi: 59 route requests, average round trip 0.76 ms, worst 4.75 ms
--rw-r--r--  2 root root 2251022 2026-11-23 19:17 /dev/shmem/baseline.kev
+brake_ctl: 150 jobs, 0 deadline misses (deadline 15.0 ms), worst response 4.07 ms
+send_chain: fast=1 cpu=1 hmi priority 20
+hmi: 59 route requests, average round trip 0.64 ms, worst 2.64 ms
+-rw-r--r--  2 root root 1973518 2026-11-23 19:53 /dev/shmem/baseline.kev
 workload exit status: 0

@@ -1,0 +1,42 @@
+{
+  "name": "latencylens",
+  "version": "1.0.0",
+  "description": "Find why a QNX OS 8.0 real-time deadline was missed: kernel trace timeline, deterministic detectors, checked AI explanations.",
+  "license": "AGPL-3.0-or-later",
+  "author": "chinesepowered",
+  "type": "module",
+  "bin": {
+    "latencylens": "bin/latencylens.mjs"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@10.28.0",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "bench": "node bin/latencylens.mjs bench samples/traces/stress.kev.gz",
+    "check": "pnpm typecheck && pnpm test && bash scripts/check-repo.sh"
+  },
+  "dependencies": {
+    "yaml": "2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

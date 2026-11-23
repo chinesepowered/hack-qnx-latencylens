@@ -1,0 +1,10 @@
+# Latency Lens deadlines for the clean baseline (samples/target/run-baseline.sh)
+threads:
+  - name: brake_ctl
+    period: 20ms
+    deadline: 15ms
+    markers: { begin: 100, end: 101 }
+  - name: hmi
+    period: 50ms
+    deadline: 20ms
+    markers: { begin: 100, end: 101 }

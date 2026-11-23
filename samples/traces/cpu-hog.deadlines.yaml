@@ -1,0 +1,10 @@
+# Latency Lens deadlines for cpu_hog (samples/src/cpu_hog.c)
+threads:
+  - name: can_rx
+    period: 10ms
+    deadline: 10ms
+    markers: { begin: 100, end: 101 }
+  - name: sensor_poll
+    period: 5ms
+    deadline: 5ms
+    markers: { begin: 100, end: 101 }

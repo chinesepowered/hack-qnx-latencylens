@@ -1,0 +1,6 @@
+# Latency Lens deadlines for the stress trace (samples/target/run-stress.sh)
+threads:
+  - name: brake_ctl
+    period: 20ms
+    deadline: 15ms
+    markers: { begin: 100, end: 101 }
