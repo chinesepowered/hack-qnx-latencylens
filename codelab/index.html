@@ -303,9 +303,11 @@ OPENAI_FALLBACK_MODEL=zai-org/GLM-5.3-Flash</pre></div>
   <figure><img class="shot" src="img/explanation.png" alt="An explanation from Qwen with every thread, priority and duration underlined in green" loading="lazy">
   <figcaption>Every thread, priority and duration in the answer is checked against the trace: green matches.</figcaption></figure>
   <p>The check is code, not another model. When an answer gets a fact wrong, the claim is struck out in
-  red. Here a model claimed the logger was raised to priority 63, which the trace contradicts:</p>
+  red. This recorded answer claimed that the mutex used <code>PTHREAD_PRIO_INHERIT</code> and that the
+  logger was raised to priority 63; the trace shows the logger at priority 10 the whole time, so both
+  claims are struck out:</p>
   <figure><img class="shot" src="img/claim-check.png" alt="A recorded answer where the claim that the logger ran at priority 63 is struck out in red" loading="lazy">
-  <figcaption>One claim contradicts the evidence: the logger stayed at priority 10.</figcaption></figure>
+  <figcaption>Two claims contradict the evidence: no inheritance happened, and the logger stayed at priority 10.</figcaption></figure>
   <p>The same from the command line, for scripts:</p>
   <div class="block"><span class="tag">Host terminal</span><pre class="cmd">latencylens explain brakesim.kev --deadlines brakesim.deadlines.yaml --finding priority-inversion-1</pre></div>
 </section>

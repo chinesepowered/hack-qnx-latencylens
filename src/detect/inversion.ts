@@ -151,7 +151,24 @@ export function detectInversions(m: Model, opts: DetectorOptions): Finding[] {
       facts.push({ key: `medium:${th}`, label: `${threadShort(m, th)} ran while ${H} was ready`, kind: 'duration', value: info.ns });
       facts.push({ key: `mediumPrio:${th}`, label: `${threadShort(m, th)} priority`, kind: 'priority', value: info.prio, thread: th });
     }
-    if (w.via === 'mutex') facts.push({ key: 'mutex', label: 'mutex address', kind: 'text', value: `0x${w.sync.toString(16)}` });
+    if (w.via === 'mutex') {
+      facts.push({ key: 'mutex', label: 'mutex address', kind: 'text', value: `0x${w.sync.toString(16)}` });
+      // What the trace says about the mutex protocol: with PTHREAD_PRIO_INHERIT (or a high enough
+      // PTHREAD_PRIO_PROTECT ceiling) the kernel would have run the holder at the waiter's priority.
+      const r = m.threads[w.holder].runs;
+      let top = -1;
+      for (let k = firstRunEndingAfter(r, w.t0); k < r.n && r.start[k] < w.t1; k++) {
+        if (r.state[k] === ST.RUNNING || r.state[k] === ST.READY) top = Math.max(top, r.prio[k]);
+      }
+      if (top >= 0 && top < w.waiterPrio) {
+        facts.push({
+          key: 'holderBoost',
+          label: `${H} priority during the wait`,
+          kind: 'text',
+          value: top === hBase ? `${top}, never raised (no priority inheritance or ceiling took effect)` : `${top}, below ${W}'s ${w.waiterPrio}`,
+        });
+      }
+    }
     const pad = Math.min(2e6, w.wait * 0.1);
     const t0 = Math.max(0, w.t0 - pad);
     const t1 = Math.min(m.durationNs, w.t1 + pad);

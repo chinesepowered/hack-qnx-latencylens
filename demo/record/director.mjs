@@ -752,7 +752,9 @@ async function sceneExplain() {
   cshot.fadeIn(0.2);
   cshot.captionOn('4', 'A recorded answer with a wrong claim: struck out', capPos, sc.t);
   cshot.showCursor(1150, 520, 0.2);
-  const bad = await C.rect('.ex-answer .claim-mismatch');
+  // the claim the narration names: the logger "raised to 63"
+  const nth = await C.page.evaluate(() => Math.max(0, [...document.querySelectorAll('.ex-answer .claim-mismatch')].findIndex((e) => e.textContent.trim() === '63')));
+  const bad = await C.rect('.ex-answer .claim-mismatch', nth);
   await cshot.move(bad.cx, bad.cy + 3, 1.0);
   cshot.ring(bad, cshot.t, sc.end, 4);
   await cshot.until(sc.n(17.0));

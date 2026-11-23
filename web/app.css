@@ -157,9 +157,9 @@ main { display: grid; grid-template-columns: 1fr 420px; min-height: 0; }
 .v-warn { color: var(--amber); font-weight: 600; }
 .facts { margin: 0 14px 10px; font-size: 12px; }
 .facts summary { cursor: pointer; color: var(--muted); }
-.facts dl { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; margin: 6px 0 0; }
+.facts dl { display: grid; grid-template-columns: minmax(45%, 1fr) minmax(0, auto); gap: 2px 12px; margin: 6px 0 0; }
 .facts dt { color: var(--muted); }
-.facts dd { margin: 0; text-align: right; font-family: ui-monospace, monospace; color: #f0f6fc; }
+.facts dd { margin: 0; text-align: right; font-family: ui-monospace, monospace; color: #f0f6fc; overflow-wrap: anywhere; }
 #detail h3 { font-size: 12px; margin: 4px 14px 4px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
 .muted { color: var(--dim); font-weight: 400; text-transform: none; letter-spacing: 0; }
 .pad { padding: 8px 14px; }

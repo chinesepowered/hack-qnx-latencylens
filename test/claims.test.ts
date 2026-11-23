@@ -1,5 +1,6 @@
 // The AI claim checker: every thread name, priority and duration in an explanation must match the
 // finding's evidence. Copyright (C) 2026 chinesepowered. SPDX-License-Identifier: AGPL-3.0-or-later
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../src/config/deadlines.js';
 import { analyse } from '../src/detect/index.js';
@@ -88,6 +89,35 @@ describe('claim checker', () => {
     const c = byText(`brake_ctl blocked at ${rel.toFixed(3)} ms.`)(`${rel.toFixed(3)} ms`);
     expect(c?.kind).toBe('time');
     expect(c?.status).toBe('ok');
+  });
+
+  it('knows the holder was never boosted in the inversion', () => {
+    expect(ctx.mutex).toMatchObject({ waiterPrio: 63, holderMax: 10, boosted: false });
+  });
+
+  it('rejects a claim that the mutex used priority inheritance when the trace shows none', () => {
+    const text = 'CAUSE: The mutex uses PTHREAD_PRIO_INHERIT, yet brake_ctl waited.\nFIX: Use PTHREAD_PRIO_INHERIT.';
+    const claims = checkClaims(text, ctx, text.indexOf('FIX')).filter((c) => c.kind === 'protocol');
+    expect(claims).toHaveLength(1); // the FIX proposes a protocol; only the CAUSE states one
+    expect(claims[0].status).toBe('mismatch');
+    expect(claims[0].note).toMatch(/no priority inheritance/);
+  });
+
+  it('reads negated and hypothetical protocol statements as such', () => {
+    const p = checkClaims('The mutex is protected by PTHREAD_PRIO_PROTECT rather than PTHREAD_PRIO_INHERIT.', ctx).filter((c) => c.kind === 'protocol');
+    expect(p.map((c) => c.status)).toEqual(['mismatch', 'ok']);
+    const lacks = checkClaims('Because the mutex lacks priority inheritance, logger stayed at its own priority.', ctx).filter((c) => c.kind === 'protocol');
+    expect(lacks.map((c) => c.status)).toEqual(['ok']);
+    expect(checkClaims('Priority inheritance would have prevented this.', ctx).filter((c) => c.kind === 'protocol')).toEqual([]);
+  });
+
+  it('flags both wrong claims in the recorded answer that invented an inheritance', async () => {
+    const recorded = JSON.parse(readFileSync(tracePath('inversion.explanations.json'), 'utf8'))['deadline-miss-1'];
+    const f = a.findings.find((x) => x.id === 'deadline-miss-1')!;
+    const ex = await explainFinding(m, f, null, recorded);
+    const bad = ex.claims.filter((c) => c.status === 'mismatch').map((c) => c.text);
+    expect(bad).toEqual(expect.arrayContaining(['PTHREAD_PRIO_INHERIT', '63']));
+    expect(ex.claimSummary.mismatch).toBe(2);
   });
 
   it('parses CAUSE and FIX even with markdown emphasis', () => {

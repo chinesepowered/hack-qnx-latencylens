@@ -3,6 +3,49 @@
 Decisions and problems, newest first. Everything here happened in one cloud session on an x86_64
 Linux container (4 vCPUs, no KVM) with QNX SDP 8.0 installed through the QNX Software Center CLI.
 
+## 2026-11-23: the video, the codelab dry run, and two fixes they prompted
+
+- **The demo video is rendered, not screen-recorded.** `demo/record/director.mjs` films the real UI
+  (`latencylens open` on the demo captures) frame by frame with Playwright at 1920x1080 and 30 fps. The
+  UI's animations, scrolling and CSS animations run on the frame clock (`demo/record/ui-harness.js`), so
+  every frame is deterministic however loaded the machine is; the pointer is an overlay moved to real
+  on-screen targets and clicks are real clicks. Terminal scenes replay asciicasts recorded from real
+  sessions against the QNX VM (`demo/record/term_session.py`) in xterm.js, retyped at a readable pace with
+  the recorded output timing. The full video is 4,250 frames, 2,269 of them rendered, in about 4 minutes.
+- **The "Explain this" click in the video is a live call** to W&B Inference (`Qwen/Qwen3.8-27B`). The
+  request is held until the frame clock has waited as long as the model took (capped at 3.5 s of
+  spinner; the footer shows the real time). The video was rendered five times while the tool improved,
+  each with a new live answer: two were fully correct, one said the mutex used `PTHREAD_PRIO_PROTECT`
+  (which led to the protocol check below), and one turned a job's 5,011 us start lateness into "missed
+  its deadline by 5011 us", which the checker struck out. The final video shows the fifth answer (20
+  claims, all matching, 5.0 s); it is kept in `demo/traces/brakesim.explanations.json`. The second answer
+  in the video, with struck-out claims, is the recorded one in
+  `samples/traces/inversion.explanations.json`, and the UI labels it "recorded".
+- **ElevenLabs: 1,936 characters** for the nine narration clips (voice Jessica, `eleven_multilingual_v2`),
+  cached by text hash so re-rendering costs nothing. Subtitles (`demo/video.srt`) are cut at the pauses
+  `silencedetect` finds in each clip.
+- **The codelab was run end to end** on a fresh `mkqnximage` image, and every command and expected output
+  in `codelab/` comes from that run (buggy: 35 of 150 late, inversion found, exit status 1; fixed: 0 late,
+  no findings, exit status 0, twice). An earlier attempt reused an older VM that hit an 84 ms emulator
+  stall: the fixed program missed 3 deadlines and telemetry ran its delayed bursts back to back (a CPU hog
+  finding). The deadline detector blamed the late timer, not a thread, so the codelab now uses that
+  output to teach the difference. That attempt also showed QEMU's obscure error when port 2222 is taken;
+  `qnx-vm.sh start` now says so plainly.
+- **procnto's own threads are no longer blamed for IST latency.** On the stress trace the IST detector
+  reported clock_cpu_1 (254) held off by ipi_cpu_1 (255) and suggested raising it above 255. Kernel
+  threads cannot be reprioritised by an application, so such delays are now notes ("kernel time, not your
+  schedule"), and `test/stress.test.ts` checks that no IST finding names a kernel thread as the blocker.
+- **The claim checker now checks mutex-protocol statements.** The second render's live answer said the
+  mutex "is protected by PTHREAD_PRIO_PROTECT rather than PTHREAD_PRIO_INHERIT" and every number in it
+  matched, so it passed. But the trace settles the question: with inheritance (or a ceiling at the
+  waiter's priority) the kernel runs the holder at the waiter's priority, and here the logger stayed at
+  10. `checkClaims()` now marks a protocol statement in the CAUSE as wrong when it contradicts that,
+  reading negations ("lacks priority inheritance", "rather than ...") and hypotheticals ("would have
+  prevented") as such; it also catches the older recorded answer's "uses the default
+  PTHREAD_PRIO_INHERIT". At the source, inversion findings now carry the measured fact ("logger priority
+  during the wait: 10, never raised") and the prompt asks the model to state a protocol only as far as
+  the facts show it. The live answers afterwards all described the protocol correctly.
+
 ## 2026-11-23: detectors, and what real traces taught them
 
 - **Mutex holder from the owner word.** `SyncMutexLock` enter logs the mutex's owner word; on 8.0 it
@@ -34,7 +77,7 @@ Linux container (4 vCPUs, no KVM) with QNX SDP 8.0 installed through the QNX Sof
   (equal-priority FIFO); and hmi at 55 delayed io-sock's network IST at 21. The baseline now runs the
   IST at 75 on CPU 0 and hmi at 20. One capture in between hit a 44.5 ms timer stall of the emulator;
   the detector traced brake_ctl's three misses to it and said so.
-- Analysis of the 20k to 63k event sample traces takes 40 to 170 ms in total (parse, model, detect).
+- Analysis of the 20k to 55k event sample traces takes 40 to 170 ms in total (parse, model, detect).
 
 ## 2026-11-23: million-event stress trace
 

@@ -5,12 +5,12 @@
 // them: a priority must be one the named thread actually had, a duration must match a measured one
 // (within the precision the text gives), a thread must be one in the evidence.
 
-import { Cls } from '../kev/constants.js';
+import { Cls, ThreadState } from '../kev/constants.js';
 import type { Finding } from '../detect/types.js';
 import { fmtDur } from '../detect/util.js';
 import type { Model } from '../model/model.js';
 
-export type ClaimKind = 'thread' | 'priority' | 'duration' | 'cpu' | 'count' | 'time';
+export type ClaimKind = 'thread' | 'priority' | 'duration' | 'cpu' | 'count' | 'time' | 'protocol';
 /** proposal: a value the FIX suggests ("raise it to 60"), not a statement about the trace. */
 export type ClaimStatus = 'ok' | 'mismatch' | 'unknown' | 'proposal';
 
@@ -35,6 +35,12 @@ export interface ClaimContext {
   counts: number[];
   cpus: Set<number>;
   allPriorities: Set<number>;
+  /**
+   * The longest mutex wait in the finding and whether the kernel raised the holder's priority while
+   * the waiter waited. A mutex with PTHREAD_PRIO_INHERIT (or PTHREAD_PRIO_PROTECT with a ceiling at
+   * or above the waiter) shows up as the holder running at the waiter's priority; null if no wait.
+   */
+  mutex: { waiter: string; waiterPrio: number; holder: string; holderMax: number; boosted: boolean } | null;
 }
 
 export function buildClaimContext(m: Model, f: Finding): ClaimContext {
@@ -78,7 +84,31 @@ export function buildClaimContext(m: Model, f: Finding): ClaimContext {
   for (const i of f.evidence) cpus.add(e.cpu[i]);
   const allPriorities = new Set<number>();
   for (const t of threads) for (const p of t.priorities) allPriorities.add(p);
-  return { threads, otherNames, durations, times, relTimes, counts, cpus, allPriorities };
+  return { threads, otherNames, durations, times, relTimes, counts, cpus, allPriorities, mutex: mutexContext(m, f, involved) };
+}
+
+function mutexContext(m: Model, f: Finding, involved: Set<number>): ClaimContext['mutex'] {
+  let best: ClaimContext['mutex'] = null;
+  let bestNs = 0;
+  for (const w of m.mutexWaits) {
+    if (w.holder < 0 || !involved.has(w.waiter) || !involved.has(w.holder)) continue;
+    const end = Number.isNaN(w.tWake) ? m.durationNs : w.tWake;
+    if (end <= f.window[0] || w.tBlock >= f.window[1] || end - w.tBlock <= bestNs) continue;
+    const prioIn = (th: number, states: number[]) => {
+      const r = m.threads[th].runs;
+      let p = -1;
+      for (let k = 0; k < r.n; k++) {
+        if (r.end[k] <= w.tBlock || r.start[k] >= end || !states.includes(r.state[k])) continue;
+        p = Math.max(p, r.prio[k]);
+      }
+      return p;
+    };
+    const waiterPrio = Math.max(prioIn(w.waiter, [ThreadState.MUTEX]), m.threads[w.waiter].basePrio);
+    const holderMax = Math.max(prioIn(w.holder, [ThreadState.RUNNING, ThreadState.READY]), m.threads[w.holder].basePrio);
+    bestNs = end - w.tBlock;
+    best = { waiter: m.threads[w.waiter].label, waiterPrio, holder: m.threads[w.holder].label, holderMax, boosted: holderMax >= waiterPrio };
+  }
+  return best;
 }
 
 const UNIT_NS: Record<string, number> = {
@@ -287,7 +317,43 @@ export function checkClaims(text: string, ctx: ClaimContext, fixStart = Infinity
     push({ start: a, end: b, text: mm[0], kind: 'cpu', status: ok ? 'ok' : 'mismatch', note: ok ? 'CPU in the evidence' : `the evidence is on CPU ${[...ctx.cpus].join(', ')}` });
   }
 
-  // 5. Counts: "35 of 150 jobs", "29 times".
+  // 5. Mutex protocol statements in the CAUSE ("the mutex uses PTHREAD_PRIO_INHERIT"): the trace shows
+  // whether the holder ran at the waiter's priority. Negated statements ("lacks priority
+  // inheritance", "rather than PTHREAD_PRIO_INHERIT") and hypotheticals ("would prevent") are read
+  // as such; the FIX proposes a protocol and is not checked.
+  const mx = ctx.mutex;
+  if (mx) {
+    const protoRe = /\bPTHREAD_PRIO_(INHERIT|PROTECT|NONE)\b|\bpriority[- ](inheritance|ceiling)\b/gi;
+    for (const mm of text.matchAll(protoRe)) {
+      const a = mm.index ?? 0;
+      const b = a + mm[0].length;
+      if (a >= fixStart || !free(a, b)) continue;
+      const sentenceStart = Math.max(...['.', ';', '!', '?', '\n'].map((d) => text.lastIndexOf(d, a - 1))) + 1;
+      const before = text.slice(Math.max(sentenceStart, a - 70), a).toLowerCase();
+      const after = text.slice(b, b + 24).toLowerCase();
+      if (/\b(if|would|could|should|unless|requires?|needs?|recommend\w*|consider)\b/.test(before) || /^\W*\w*\W*(would|could|should|might)\b/.test(after)) continue;
+      const negated = /\b(no|not|lacks?|lacking|without|instead of|rather than|missing|never|neither|nor|absence of|disabled)\b|n't\b/.test(before);
+      const none = (mm[1] ?? '').toUpperCase() === 'NONE';
+      // what the statement says about the trace: did the holder get the waiter's priority?
+      const saysBoosted = none ? negated : !negated;
+      const ok = saysBoosted === mx.boosted;
+      const seen = `${mx.holder} ran at priority ${mx.holderMax} at most while ${mx.waiter} (${mx.waiterPrio}) waited`;
+      push({
+        start: a,
+        end: b,
+        text: mm[0],
+        kind: 'protocol',
+        status: ok ? 'ok' : 'mismatch',
+        note: ok
+          ? `matches the trace: ${seen}`
+          : mx.boosted
+            ? `the trace shows the holder's priority raised: ${seen}`
+            : `the trace shows no priority inheritance or ceiling: ${seen}`,
+      });
+    }
+  }
+
+  // 6. Counts: "35 of 150 jobs", "29 times".
   for (const mm of text.matchAll(/\b(\d+)\s+(?:out\s+)?(?:of\s+(?:the\s+)?(\d+)\s+)?(jobs?|deadlines?|times|occurrences|interrupts?|requests?|deliveries|misses|episodes)\b/gi)) {
     const a = mm.index ?? 0;
     const b = a + mm[0].length;
