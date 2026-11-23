@@ -109,21 +109,32 @@ export function detectIstLatency(m: Model, opts: DetectorOptions, notes: string[
     // Under strict priority scheduling only threads at or above the IST's priority can hold it off
     // its CPU; time "taken" by lower-priority threads is a stall outside the schedule.
     const istPrio = T.basePrio;
-    const busy = (x: { t0: number; t2: number }) =>
+    // Time the IST's CPU spent on threads at or above its priority, split into application threads
+    // (a schedule you can change) and procnto's own threads (kernel time you cannot reprioritise).
+    const occupied = (x: { t0: number; t2: number }, kernel: boolean) =>
       cpuOccupants(m, cpu, x.t0, x.t2, new Set([th]))
-        .filter((o) => o.prio >= istPrio)
+        .filter((o) => o.prio >= istPrio && m.threads[o.thread].isKernel === kernel)
         .reduce((s2, o) => s2 + o.ns, 0);
     const slow = lat.filter((x) => x.t2 - x.t0 >= opts.istLatencyNs);
-    const over = slow.filter((x) => busy(x) >= 0.5 * (x.t2 - x.t0)).sort((a, b) => b.t2 - b.t0 - (a.t2 - a.t0));
-    const platform = slow.length - over.length;
-    if (platform > 0) {
-      const worstPlatform = Math.max(...slow.filter((x) => !over.includes(x)).map((x) => x.t2 - x.t0));
-      notes.push(`${T.label}: ${plural(platform, 'late wakeup')} of up to ${fmtDur(worstPlatform)} while no thread of equal or higher priority ran on CPU ${cpu} (platform latency, not scheduling)`);
+    const over = slow.filter((x) => occupied(x, false) >= 0.5 * (x.t2 - x.t0)).sort((a, b) => b.t2 - b.t0 - (a.t2 - a.t0));
+    const rest = slow.filter((x) => !over.includes(x));
+    const inKernel = rest.filter((x) => occupied(x, true) >= 0.5 * (x.t2 - x.t0));
+    const platform = rest.filter((x) => !inKernel.includes(x));
+    if (inKernel.length) {
+      const worst = inKernel.reduce((a, b) => (b.t2 - b.t0 > a.t2 - a.t0 ? b : a));
+      const k = cpuOccupants(m, cpu, worst.t0, worst.t2, new Set([th])).filter((o) => o.prio >= istPrio && m.threads[o.thread].isKernel)[0];
+      notes.push(
+        `${T.label}: ${plural(inKernel.length, 'late wakeup')} of up to ${fmtDur(worst.t2 - worst.t0)} while procnto's own ${k ? `${threadShort(m, k.thread)} (priority ${k.prio})` : 'threads'} held CPU ${cpu} (kernel time, not your schedule; under QEMU's TCG usually emulation noise)`,
+      );
+    }
+    if (platform.length) {
+      const worstPlatform = Math.max(...platform.map((x) => x.t2 - x.t0));
+      notes.push(`${T.label}: ${plural(platform.length, 'late wakeup')} of up to ${fmtDur(worstPlatform)} while no thread of equal or higher priority ran on CPU ${cpu} (platform latency, not scheduling)`);
     }
     if (!over.length) continue;
     const w = over[0];
     const worstNs = w.t2 - w.t0;
-    const blockers = cpuOccupants(m, cpu, w.t0, w.t2, new Set([th])).filter((o) => o.prio >= istPrio);
+    const blockers = cpuOccupants(m, cpu, w.t0, w.t2, new Set([th])).filter((o) => o.prio >= istPrio && !m.threads[o.thread].isKernel);
     const crossCpu = w.cpu !== cpu;
     const top = blockers[0];
     const prio = T.basePrio;
@@ -158,7 +169,7 @@ export function detectIstLatency(m: Model, opts: DetectorOptions, notes: string[
       (coalesced ? `${plural(coalesced, 'interrupt')} arrived while ${name} was still busy or preempted, so the device was serviced late or samples were merged.` : '');
     const hint =
       (top
-        ? `An IST has to outrank the work that shares its CPU. Raise ${name} above ${threadShort(m, top.thread)} (priority ${top.prio}), for example to ${Math.min(254, top.prio + 10)}, or move ${threadShort(m, top.thread)} to another CPU with a runmask.`
+        ? `An IST has to outrank the work that shares its CPU. Raise ${name} above ${threadShort(m, top.thread)} (priority ${top.prio}), for example to ${Math.min(255, top.prio + 10)}, or move ${threadShort(m, top.thread)} to another CPU with a runmask.`
         : `Raise ${name}'s priority above the threads that share its CPU.`) +
       (crossCpu ? ` Run ${name} on CPU ${w.cpu}, where the interrupt arrives, to avoid the cross-CPU wakeup.` : '');
     const pad = Math.max(500_000, (w.t2 - w.t0) * 0.15);

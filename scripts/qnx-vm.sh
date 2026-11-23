@@ -66,6 +66,9 @@ cmd_image() {
 cmd_start() {
   [[ -f "$QNX_VM_DIR/output/ifs.bin" ]] || die "no image in $QNX_VM_DIR, run: $0 image"
   if running; then echo "qnx-vm: already running (pid $(cat "$(pidfile)"))"; return 0; fi
+  if (exec 3<>"/dev/tcp/127.0.0.1/$QNX_VM_PORT") 2>/dev/null; then
+    die "port $QNX_VM_PORT is already in use (another VM?); stop it or set QNX_VM_PORT"
+  fi
   local accel=(-accel tcg,thread=multi -cpu "$QNX_VM_CPU_MODEL")
   if [[ "${QNX_VM_ICOUNT:-0}" != 0 ]]; then
     # Instruction counting: guest time advances with executed instructions, so host scheduling

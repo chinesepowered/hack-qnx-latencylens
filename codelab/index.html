@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#4F7DC9">
+<title>Find a priority inversion on QNX in 20 minutes</title>
+<meta name="description" content="Capture a QNX OS 8.0 kernel trace with tracelogger in QEMU, find a priority inversion with Latency Lens, fix it with a priority-inheritance mutex and prove the fix with a clean trace.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&amp;family=Roboto+Mono:wght@400;500&amp;display=swap">
+<link rel="stylesheet" href="codelab.css">
+<!-- Copyright (C) 2026 chinesepowered. SPDX-License-Identifier: AGPL-3.0-or-later -->
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- Capy, the codelab's guide: drawn here in SVG, used only in this codelab. -->
+    <symbol id="capy" viewBox="0 0 220 170">
+      <ellipse cx="114" cy="157" rx="80" ry="8" fill="#000" opacity=".08"/>
+      <rect x="152" y="116" width="22" height="38" rx="10" fill="#8a5a33"/>
+      <path d="M44 94 C44 60 80 46 122 47 C170 49 198 72 198 106 C198 134 174 148 130 148 L82 148 C58 148 44 128 44 94 Z" fill="#b07a46"/>
+      <path d="M150 62 C170 66 186 78 192 94" stroke="#9a6538" stroke-width="3" fill="none" stroke-linecap="round" opacity=".5"/>
+      <rect x="74" y="122" width="21" height="33" rx="9" fill="#9a6538"/>
+      <rect x="124" y="124" width="21" height="31" rx="9" fill="#9a6538"/>
+      <path d="M16 72 C16 49 35 35 60 35 L86 35 C104 35 117 48 117 66 L117 88 C117 104 105 115 88 115 L46 115 C29 115 16 102 16 87 Z" fill="#c08850"/>
+      <ellipse cx="99" cy="36" rx="9" ry="7.5" fill="#8a5a33"/>
+      <ellipse cx="99" cy="37" rx="4.5" ry="3.6" fill="#6b4423"/>
+      <circle cx="78" cy="60" r="5.4" fill="#2b1d12"/>
+      <circle cx="79.8" cy="58.2" r="1.8" fill="#fff"/>
+      <ellipse cx="24" cy="66" rx="5.5" ry="4" fill="#5a3a22"/>
+      <path d="M23 88 q9 6 19 2" stroke="#5a3a22" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+      <ellipse cx="62" cy="83" rx="8.5" ry="5.5" fill="#e8a57a" opacity=".55"/>
+      <circle cx="66" cy="25" r="11.5" fill="#f6b73c"/>
+      <circle cx="62.5" cy="21.5" r="3" fill="#fff" opacity=".35"/>
+      <path d="M68 14 q9 -9 15 -2 q-7 6 -15 2 Z" fill="#3fa34d"/>
+    </symbol>
+    <symbol id="capy-lens" viewBox="0 0 220 170">
+      <use href="#capy"/>
+      <path d="M156 104 L184 134" stroke="#5f6368" stroke-width="9" stroke-linecap="round"/>
+      <circle cx="140" cy="86" r="24" fill="#e8f0fe" fill-opacity=".75" stroke="#1a73e8" stroke-width="7"/>
+      <path d="M126 88 h7 l4 -11 l6 20 l4 -9 h8" fill="none" stroke="#1e8e3e" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+      <rect x="112" y="98" width="20" height="14" rx="7" fill="#9a6538"/>
+    </symbol>
+  </defs>
+</svg>
+
+<header class="appbar">
+  <button class="menu" id="menu" aria-label="Steps"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg></button>
+  <a class="home" href="https://github.com/chinesepowered/hack-qnx-latencylens" title="Latency Lens on GitHub" aria-label="Latency Lens on GitHub">
+    <svg width="24" height="24" viewBox="0 0 32 32" aria-hidden="true"><circle cx="13" cy="13" r="9" fill="none" stroke="#1a73e8" stroke-width="3"/><path d="M19.5 19.5 L28 28" stroke="#1a73e8" stroke-width="3.5" stroke-linecap="round"/><path d="M8 15 h3 l1.5 -5 l2 8 l1.5 -3 h3" fill="none" stroke="#1e8e3e" stroke-width="1.8" stroke-linejoin="round"/></svg>
+  </a>
+  <h1>Find a priority inversion on QNX in 20 minutes</h1>
+  <div class="remaining"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm.5-13H11v6l5.2 3.2.8-1.3-4.5-2.7V7z"/></svg><span id="remaining"></span></div>
+</header>
+<div class="progress"><div id="bar"></div></div>
+<nav class="drawer" aria-label="Steps">
+  <ol id="toc"></ol>
+  <div class="foot">Latency Lens is open source (AGPL-3.0).<br><a href="https://github.com/chinesepowered/hack-qnx-latencylens/issues">Report a mistake in this codelab</a></div>
+</nav>
+
+<main>
+<div class="card">
+
+<!-- 1 ------------------------------------------------------------------------------------------>
+<section class="step" data-label="Overview" data-duration="1">
+  <div class="hero">
+    <svg viewBox="0 0 220 170" role="img" aria-label="Capy the capybara holding a magnifying glass"><use href="#capy-lens"/></svg>
+    <p>A brake controller on QNX misses a third of its deadlines. Its code looks fine, its priorities look
+    right, and the bug only shows up when three threads line up in time. In this codelab you will catch it
+    the way real-time engineers do: record what the kernel did, then read the trace. Latency Lens does the
+    reading for you.</p>
+  </div>
+  <h3>What you'll do</h3>
+  <ul>
+    <li>Build a small, deliberately buggy brake controller for QNX OS 8.0 with <code>qcc</code>.</li>
+    <li>Boot QNX OS 8.0 in QEMU and record a kernel event trace with <code>tracelogger</code>.</li>
+    <li>Open the trace in Latency Lens, which finds the deadline misses and the priority inversion behind
+    them, with the exact kernel events as evidence.</li>
+    <li>Optionally ask an LLM to explain the finding, with every number it writes checked against the trace.</li>
+    <li>Fix the bug with a priority-inheritance mutex, capture again and prove the fix.</li>
+  </ul>
+  <h3>What you'll learn</h3>
+  <ul>
+    <li>What a QNX kernel trace records: thread states, priorities, kernel calls, interrupts and messages.</li>
+    <li>How a priority inversion looks on a timeline, and why <code>PTHREAD_PRIO_INHERIT</code> fixes it.</li>
+    <li>How to tell a scheduling bug from platform latency, and how to gate CI on deadlines.</li>
+  </ul>
+  <h3>What you'll need</h3>
+  <ul>
+    <li>A Linux x86_64 machine (a VM or container works; KVM is used when present, otherwise QEMU emulates).</li>
+    <li>A free myQNX account with a QNX SDP 8.0 non-commercial license.</li>
+    <li>Node.js 20 or newer and pnpm, git, QEMU and an ssh client.</li>
+  </ul>
+  <aside class="capy">
+    <svg viewBox="0 0 220 170" aria-hidden="true"><use href="#capy"/></svg>
+    <p>Hi, I'm Capy. Capybaras are famously calm, and so is a real-time system whose highest-priority
+    thread never waits on a lower one. Every output in this codelab was recorded on QNX OS 8.0 in QEMU
+    while it was written, so you can compare yours line by line. Timings vary a little from run to run.</p>
+  </aside>
+</section>
+
+<!-- 2 ------------------------------------------------------------------------------------------>
+<section class="step" data-label="Install QNX SDP 8.0 and QEMU" data-duration="3" hidden>
+  <p>The QNX Software Development Platform (SDP) 8.0 gives you <code>qcc</code> (the QNX compiler driver),
+  <code>mkqnximage</code> (builds a bootable QNX image) and the trace tools. If you already have it in
+  <code>~/qnx800</code>, skip to the last command of this step.</p>
+  <p>Sign in to myQNX and download the QNX Software Center installer (put your myQNX user and password in
+  <code>MYQNX_USER</code> and <code>MYQNX_PASSWORD</code> first):</p>
+  <div class="block"><span class="tag">Host terminal</span><pre class="cmd">mkdir -p ~/.qnx
+curl --cookie-jar ~/.qnx/myqnxcookies.auth --form "userlogin=$MYQNX_USER" --form "password=$MYQNX_PASSWORD" -X POST https://www.qnx.com/account/login.html -o /dev/null
+curl -L --cookie ~/.qnx/myqnxcookies.auth https://www.qnx.com/download/download/79441/qnx-setup-2.0.4-202501021438-linux.run -o qnx-setup-lin.run
+chmod a+x qnx-setup-lin.run
+./qnx-setup-lin.run force-override disable-auto-start agree-to-license-terms ~/qnxinstall</pre></div>
+  <p>Activate your license and install the SDP 8.0 baseline (about 3.6 GB):</p>
+  <div class="block"><span class="tag">Host terminal</span><pre class="cmd">QSC=~/qnxinstall/qnxsoftwarecenter/qnxsoftwarecenter_clt
+$QSC -syncLicenseKeys -myqnx.user="$MYQNX_USER" -myqnx.password="$MYQNX_PASSWORD" -activateAll
+$QSC -mirror -cleanInstall -installBaseline com.qnx.qnx800 -destination ~/qnx800 -myqnx.user="$MYQNX_USER" -myqnx.password="$MYQNX_PASSWORD"</pre></div>
+  <aside class="warning"><p>Run <code>-mirror</code> and <code>-installBaseline</code> in one command as shown. On a fresh
+  install, <code>-installBaseline</code> alone fails with "run with -mirrorBaseline first", and
+  <code>-mirrorBaseline</code> alone mirrors only part of the metadata.</p></aside>
+  <p>Install QEMU and ssh, then load the SDP into your shell and check the compiler:</p>
+  <div class="block"><span class="tag">Host terminal</span><pre class="cmd">sudo apt-get install -y qemu-system-x86 openssh-client socat
+source ~/qnx800/qnxsdp-env.sh
+qcc -V</pre></div>
+  <div class="block"><span class="tag">Expected output</span><pre class="out">QNX_HOST=/home/you/qnx800/host/linux/x86_64
+QNX_TARGET=/home/you/qnx800/target/qnx
+MAKEFLAGS=-I/home/you/qnx800/target/qnx/usr/include
+cc: targets available in /home/you/qnx800/host/linux/x86_64/etc/qcc:
+	12.2.0,gcc_ntoaarch64le_gpp
+	12.2.0,gcc_ntox86_64	(default)
+	12.2.0,gcc_ntox86_64_gpp
+	12.2.0,gcc_ntoaarch64le
+...</pre></div>
+  <aside class="special"><p>The free non-commercial license allows a limited number of activated machines. When you are
+  done with a machine, <code>$QSC -myqnx.user=... -myqnx.password=... -deactivateAll</code> releases it.</p></aside>
+</section>
+
+<!-- 3 ------------------------------------------------------------------------------------------>
+<section class="step" data-label="Get Latency Lens" data-duration="2" hidden>
+  <p>Latency Lens runs on the host. It reads <code>.kev</code> trace files itself, so opening a trace needs
+  no QNX installation at all.</p>
+  <div class="block"><span class="tag">Host terminal</span><pre class="cmd"><span class="c"># no pnpm yet? run: corepack enable</span>
+git clone https://github.com/chinesepowered/hack-qnx-latencylens.git ~/hack-qnx-latencylens
+cd ~/hack-qnx-latencylens
+pnpm install
+pnpm build</pre></div>
+  <div class="block"><span class="tag">Expected output (last line)</span><pre class="out">built dist/cli.js and dist/web/</pre></div>
+  <p>Now make a workspace with the sample program, its deadline file, and two short commands on your
+  <code>PATH</code>: <code>latencylens</code> and <code>qnx-vm</code> (a helper that builds, boots and talks to a QNX
+  virtual machine).</p>
+  <div class="block"><span class="tag">Host terminal</span><pre class="cmd">mkdir -p ~/brakesim-demo/bin
+cd ~/brakesim-demo
+ln -s ~/hack-qnx-latencylens/bin/latencylens.mjs bin/latencylens
+ln -s ~/hack-qnx-latencylens/scripts/qnx-vm.sh bin/qnx-vm
+export PATH="$HOME/brakesim-demo/bin:$PATH"
+cp ~/hack-qnx-latencylens/samples/src/brakesim.c ~/hack-qnx-latencylens/samples/src/ll_common.h .
+cp ~/hack-qnx-latencylens/demo/traces/brakesim.deadlines.yaml .
+ls</pre></div>
+  <div class="block"><span class="tag">Expected output</span><pre class="out">bin  brakesim.c  brakesim.deadlines.yaml  ll_common.h</pre></div>
+  <aside class="capy">
+    <svg viewBox="0 0 220 170" aria-hidden="true"><use href="#capy"/></svg>
+    <p>No QNX machine at hand yet? The repository ships real traces. Try
+    <code>latencylens open ~/hack-qnx-latencylens/samples/traces/inversion.kev</code> and come back.</p>
+  </aside>
+</section>
+
+<!-- 4 ------------------------------------------------------------------------------------------>
+<section class="step" data-label="Boot QNX OS 8.0 in QEMU" data-duration="2" hidden>
+  <p><code>qnx-vm image</code> runs the SDP's <code>mkqnximage</code> (<code>--type=qemu --arch=x86_64</code>) with an
+  ssh key baked in. <code>qnx-vm start</code> boots it in QEMU with ssh forwarded to port 2222 of your
+  host; it uses KVM when <code>/dev/kvm</code> is writable and QEMU's TCG emulator otherwise.</p>
+  <div class="block"><span class="tag">Host terminal</span><pre class="cmd">ls ~/.ssh/qnxvm_ed25519 || ssh-keygen -t ed25519 -N '' -f ~/.ssh/qnxvm_ed25519
+qnx-vm image
+qnx-vm start
+qnx-vm ssh uname -a</pre></div>
+  <div class="block"><span class="tag">Expected output (abridged)</span><pre class="out">Generating output/build/startup.sh
+...
+Building disk . . .
+Target type: qemu
+Architecture: x86_64
+...
+qnx-vm: booting (pid 22303), serial log: /home/you/qnxvm/output/serial.log
+qnx-vm: ssh ready after 14 s
+QNX latencylens 8.0.0 2026/10/30-09:10:05EDT x86pc x86_64</pre></div>
+  <p>That last line comes from the QNX target: QNX OS 8.0 for x86_64, running in QEMU.</p>
+  <aside class="warning"><p>If <code>qnx-vm start</code> says the port is already in use, another VM is running. Stop it
+  with <code>qnx-vm stop</code> or pick another port with <code>QNX_VM_PORT=2223</code>.</p></aside>
+</section>
+
+<!-- 5 ------------------------------------------------------------------------------------------>
+<section class="step" data-label="Meet the buggy brake controller" data-duration="2" hidden>
+  <p><code>brakesim.c</code> runs three <code>SCHED_FIFO</code> threads pinned to CPU 0:</p>
+  <table class="facts">
+    <tr><th>Thread</th><th>Priority</th><th>What it does</th></tr>
+    <tr><td>brake_ctl</td><td>63</td><td>Every 20 ms: computes a brake pressure, appends a record to the log under <code>log_lock</code>. Deadline 15 ms.</td></tr>
+    <tr><td>telemetry</td><td>30</td><td>Every 100 ms: a 30 ms burst of CPU work.</td></tr>
+    <tr><td>logger</td><td>10</td><td>Every 100 ms: takes <code>log_lock</code> and formats the log for 2 ms.</td></tr>
+  </table>
+  <p>Priorities look right: the brake loop is highest. The bug is one line:</p>
+  <div class="block"><span class="tag">brakesim.c</span><pre class="src">/* The protocol of log_lock. BUG: this line came over from a Linux port, where PTHREAD_PRIO_NONE is
+ * the default. QNX's own default is PTHREAD_PRIO_INHERIT ... */
+#define LOG_LOCK_PROTOCOL <span class="hl">PTHREAD_PRIO_NONE</span>
+...
+pthread_mutexattr_setprotocol(&amp;ma, LOG_LOCK_PROTOCOL);
+pthread_mutex_init(&amp;log_lock, &amp;ma);</pre></div>
+  <p>Each brake job also marks its start and end in the trace with <code>TraceEvent()</code>, so Latency Lens
+  can measure every job's response time:</p>
+  <div class="block"><span class="tag">brakesim.c</span><pre class="src">TraceEvent(_NTO_TRACE_INSERTSUSEREVENT, 100, seq, late_us);  /* job begins */
+...
+TraceEvent(_NTO_TRACE_INSERTSUSEREVENT, 101, seq, resp_us);  /* job ends   */</pre></div>
+  <p>Build it with <code>qcc</code> for x86_64, copy it to the target and run it for 3 seconds:</p>
+  <div class="block"><span class="tag">Host terminal</span><pre class="cmd">qcc -Vgcc_ntox86_64 -O2 -o brakesim brakesim.c
+qnx-vm put brakesim /tmp/brakesim
+qnx-vm ssh /tmp/brakesim -s 3</pre></div>
+  <div class="block"><span class="tag">Expected output</span><pre class="out">brakesim: protocol=PTHREAD_PRIO_NONE
+brake_ctl: 150 jobs, 34 deadline misses (deadline 15.0 ms), worst response 43.53 ms</pre></div>
+  <p>About a third of the jobs are late, some by almost 30 ms. Why? Time to look inside.</p>
+</section>
+
+<!-- 6 ------------------------------------------------------------------------------------------>
+<section class="step" data-label="Capture a kernel trace" data-duration="2" hidden>
+  <p><code>tracelogger</code> records the kernel's instrumentation into a <code>.kev</code> file. Start it, give it a
+  second, run the program, and wait for both:</p>
+  <div class="block"><span class="tag">Host terminal</span><pre class="cmd">qnx-vm ssh 'tracelogger -w -s 5 -f /dev/shmem/brakesim.kev &amp; sleep 1; /tmp/brakesim -s 3; wait'
+qnx-vm get /dev/shmem/brakesim.kev .</pre></div>
+  <div class="block"><span class="tag">Expected output</span><pre class="out">brakesim: protocol=PTHREAD_PRIO_NONE
+brake_ctl: 150 jobs, 35 deadline misses (deadline 15.0 ms), worst response 43.02 ms</pre></div>
+  <table class="facts">
+    <tr><th>Option</th><th>Meaning</th></tr>
+    <tr><td><code>-w</code></td><td>Wide mode: thread events carry the priority, kernel calls carry their arguments. Latency Lens needs it.</td></tr>
+    <tr><td><code>-s 5</code></td><td>Log for 5 seconds, then stop.</td></tr>
+    <tr><td><code>-f</code></td><td>Output file. <code>/dev/shmem</code> is RAM, so writing the trace does not disturb the timing.</td></tr>
+  </table>
+  <p>The file is about 1.6 MB: some 21,000 kernel events in 5 seconds. Reading them by hand would take a while.</p>
+</section>
+
+<!-- 7 ------------------------------------------------------------------------------------------>
+<section class="step" data-label="Ask Latency Lens" data-duration="1" hidden>
+  <p>The deadline file tells Latency Lens which thread is periodic and how late is too late:</p>
+  <div class="block"><span class="tag">brakesim.deadlines.yaml</span><pre class="src">threads:
+  - name: brake_ctl          # 50 Hz brake-pressure control loop
+    period: 20ms
+    deadline: 15ms
+    markers: { begin: 100, end: 101 }   # TraceEvent() job markers emitted by brakesim</pre></div>
+  <div class="block"><span class="tag">Host terminal</span><pre class="cmd">latencylens report brakesim.kev --deadlines brakesim.deadlines.yaml --format summary; echo "exit status $?"</pre></div>
+  <div class="block"><span class="tag">Expected output</span><pre class="out">brakesim.kev: 2 findings (QNX 8.0.0, 2 CPUs, 5.00 s, 21,029 events)
+  CRITICAL deadline-miss-1       brake_ctl missed 35 of 150 deadlines (15.0 ms)
+  CRITICAL priority-inversion-1  Priority inversion: brake_ctl (63) waited on logger (10) while telemetry (30) ran
+exit status 1</pre></div>
+  <p>In well under a second it measured every job against the deadline and found what delayed them. The
+  full report (<code>--format md</code>) explains each finding:</p>
+  <div class="block"><span class="tag">From latencylens report ... --format md</span><pre class="out">brake_ctl (priority 63) waited 42.1 ms for the mutex at 0x3a33423040, which logger (priority 10)
+had to release. logger was ready to run for 37.5 ms of that time but telemetry (priority 30) ran
+instead for 37.5 ms on CPU 0, so the priority 63 thread waited on a priority 30 thread: a priority
+inversion. It happened 28 times in this trace (855 ms of inverted time in total); the worst wait
+began at 3.942756 s.</pre></div>
+  <aside class="special"><p>You may see a third finding, an IST latency for <code>virtio_pci0 irq 257</code>, if your ssh
+  session was busy while the trace ran. That one is real too: the network driver's interrupt service
+  thread runs at priority 21 on the same CPU as telemetry at 30, and waits whenever telemetry bursts.</p></aside>
+</section>
+
+<!-- 8 ------------------------------------------------------------------------------------------>
+<section class="step" data-label="Find the inversion on the timeline" data-duration="3" hidden>
+  <div class="block"><span class="tag">Host terminal</span><pre class="cmd">latencylens open brakesim.kev --deadlines brakesim.deadlines.yaml</pre></div>
+  <div class="block"><span class="tag">Expected output</span><pre class="out">Latency Lens: brakesim.kev: 2 findings
+http://127.0.0.1:7878/
+(Ctrl+C to stop)</pre></div>
+  <p>Open <a href="http://127.0.0.1:7878/">http://127.0.0.1:7878/</a>. The timeline has one lane per CPU and
+  one per thread, grouped by process. Scroll to zoom, drag to pan, press <kbd>F</kbd> to fit the whole trace.</p>
+  <p>Click the <b>Priority inversion</b> finding. The timeline jumps to the worst occurrence and pins the three
+  threads involved to the top:</p>
+  <figure><img class="shot" src="img/finding.png" alt="Latency Lens showing the priority inversion: brake_ctl blocked on the mutex while telemetry runs and logger waits" loading="lazy">
+  <figcaption>The capture from the demo video: in its worst occurrence the priority 63 thread waited 74 ms on a priority 30 one.</figcaption></figure>
+  <table class="facts">
+    <tr><th>Lane</th><th>What you see</th></tr>
+    <tr><td>brake_ctl (63)</td><td><span class="swatch" style="background:#f85149"></span>red: blocked on a mutex (<code>STATE_MUTEX</code>) for the whole window.</td></tr>
+    <tr><td>logger (10)</td><td><span class="swatch" style="background:#d29922"></span>yellow: ready, holding the mutex, but not allowed to run.</td></tr>
+    <tr><td>telemetry (30)</td><td><span class="swatch" style="background:#3fb950"></span>green: running on CPU 0, priority 30.</td></tr>
+  </table>
+  <p>Hover a lane to read its state, priority and duration in the status bar. The panel lists the measured
+  facts and the evidence: the exact kernel events, from <code>SyncMutexLock</code> with the owner of the
+  mutex to the unlock that finally lets brake_ctl go. Hover an evidence row to see where it sits on the
+  timeline. <kbd>N</kbd> and <kbd>P</kbd> step through every occurrence.</p>
+  <aside class="capy">
+    <svg viewBox="0 0 220 170" aria-hidden="true"><use href="#capy"/></svg>
+    <p>That is the whole bug: the brake loop needs a lock the logger holds; the logger is ready to finish in
+    2 ms, but telemetry outranks the logger, so the brake loop waits for telemetry's entire burst.</p>
+  </aside>
+  <aside class="special"><p>Running on a remote machine? Use <code>--host 0.0.0.0</code> or forward the port:
+  <code>ssh -L 7878:127.0.0.1:7878 you@machine</code>.</p></aside>
+</section>
+
+<!-- 9 ------------------------------------------------------------------------------------------>
+<section class="step" data-label="Explain it with AI (optional)" data-duration="2" hidden>
+  <p>Latency Lens is complete without an LLM. If you have a key for an OpenAI-compatible endpoint, it can
+  also write the cause and the fix in plain words. It sends only this finding and its evidence events.
+  Create <code>.env</code> in <code>~/brakesim-demo</code> (it is read from the working directory or any parent):</p>
+  <div class="block"><span class="tag">~/brakesim-demo/.env</span><pre class="src">OPENAI_BASE_URL=https://api.inference.wandb.ai/v1
+OPENAI_API_KEY=your-wandb-api-key
+OPENAI_MODEL=Qwen/Qwen3.8-27B
+OPENAI_FALLBACK_MODEL=zai-org/GLM-5.3-Flash</pre></div>
+  <p>Restart <code>latencylens open</code>, select the inversion and click <b>Explain this</b>:</p>
+  <figure><img class="shot" src="img/explanation.png" alt="An explanation from Qwen with every thread, priority and duration underlined in green" loading="lazy">
+  <figcaption>Every thread, priority and duration in the answer is checked against the trace: green matches.</figcaption></figure>
+  <p>The check is code, not another model. When an answer gets a fact wrong, the claim is struck out in
+  red. Here a model claimed the logger was raised to priority 63, which the trace contradicts:</p>
+  <figure><img class="shot" src="img/claim-check.png" alt="A recorded answer where the claim that the logger ran at priority 63 is struck out in red" loading="lazy">
+  <figcaption>One claim contradicts the evidence: the logger stayed at priority 10.</figcaption></figure>
+  <p>The same from the command line, for scripts:</p>
+  <div class="block"><span class="tag">Host terminal</span><pre class="cmd">latencylens explain brakesim.kev --deadlines brakesim.deadlines.yaml --finding priority-inversion-1</pre></div>
+</section>
+
+<!-- 10 ----------------------------------------------------------------------------------------->
+<section class="step" data-label="Fix it with priority inheritance" data-duration="2" hidden>
+  <p>With <code>PTHREAD_PRIO_INHERIT</code>, a thread holding the mutex runs at the priority of the
+  highest-priority thread waiting for it. The logger then outranks telemetry for the 2 ms it needs, and the
+  brake loop gets its lock back almost at once. It is QNX's default protocol; the sample overrode it.</p>
+  <div class="block"><span class="tag">Host terminal</span><pre class="cmd">cp brakesim.c brakesim.c.orig
+sed -i 's/PTHREAD_PRIO_NONE$/PTHREAD_PRIO_INHERIT/' brakesim.c
+diff -u brakesim.c.orig brakesim.c</pre></div>
+  <div class="block"><span class="tag">Expected output</span><pre class="out">--- brakesim.c.orig
++++ brakesim.c
+@@ -36,7 +36,7 @@
+  * the default. QNX's own default is PTHREAD_PRIO_INHERIT: the owner of the lock runs at the priority
+  * of the highest-priority thread waiting for it. Change this line to fix the sample. */
+ #ifndef LOG_LOCK_PROTOCOL
+<span class="del">-#define LOG_LOCK_PROTOCOL PTHREAD_PRIO_NONE</span>
+<span class="add">+#define LOG_LOCK_PROTOCOL PTHREAD_PRIO_INHERIT</span>
+ #endif
+
+ #define BRAKE_PERIOD LL_MS(20)</pre></div>
+  <p>Rebuild, capture again, and ask Latency Lens:</p>
+  <div class="block"><span class="tag">Host terminal</span><pre class="cmd">qcc -Vgcc_ntox86_64 -O2 -o brakesim brakesim.c &amp;&amp; qnx-vm put brakesim /tmp/brakesim
+qnx-vm ssh 'tracelogger -w -s 5 -f /dev/shmem/fixed.kev &amp; sleep 1; /tmp/brakesim -s 3; wait'
+qnx-vm get /dev/shmem/fixed.kev .
+latencylens report fixed.kev --deadlines brakesim.deadlines.yaml --format summary; echo "exit status $?"</pre></div>
+  <div class="block"><span class="tag">Expected output</span><pre class="out">brakesim: protocol=PTHREAD_PRIO_INHERIT
+brake_ctl: 150 jobs, 0 deadline misses (deadline 15.0 ms), worst response 4.64 ms
+fixed.kev: no findings (QNX 8.0.0, 2 CPUs, 5.00 s, 21,345 events)
+exit status 0</pre></div>
+  <p>Zero misses, worst response 4.6 ms instead of 43 ms, and a clean report with exit status 0.</p>
+  <aside class="warning">
+    <p>Under QEMU without KVM the emulator itself occasionally stalls for tens of milliseconds, so a fixed run
+    can still show a late job now and then. Read the finding before you blame your code. Latency Lens tells
+    the two apart; this is from one such run while this codelab was written:</p>
+    <pre class="out">... a backlog that began at 3.669640 s, when the timer that releases brake_ctl fired 84.0 ms
+late with no other thread using the CPU (platform latency).
+Fix: Nothing in the schedule delayed these jobs: the timer interrupt itself arrived late. On real
+hardware look for SMIs or firmware stalls; under QEMU's TCG this is emulation noise.</pre>
+    <p>The same stall can make telemetry run its delayed bursts back to back, which shows up as a CPU hog
+    finding for telemetry in that window. Capture again and the run is clean.</p>
+  </aside>
+</section>
+
+<!-- 11 ----------------------------------------------------------------------------------------->
+<section class="step" data-label="See inheritance at work" data-duration="1" hidden>
+  <div class="block"><span class="tag">Host terminal</span><pre class="cmd">latencylens open fixed.kev --deadlines brakesim.deadlines.yaml</pre></div>
+  <p>The panel says <b>No findings</b>. Zoom into any moment where brake_ctl blocks on the mutex (red): the
+  logger now runs at priority 63 until it unlocks, typically for less than 2 ms, and telemetry waits.</p>
+  <figure><img class="shot" src="img/fixed.png" alt="The fixed trace: logger runs at priority 63 while brake_ctl waits, then brake_ctl runs" loading="lazy">
+  <figcaption>The status bar reads "brakesim/logger RUNNING at priority 63": inheritance, recorded by the kernel.</figcaption></figure>
+  <p>The kernel logs a thread's priority with every state change, so the boost is in the trace itself. In
+  the buggy trace the same lane said "READY at priority 10".</p>
+</section>
+
+<!-- 12 ----------------------------------------------------------------------------------------->
+<section class="step" data-label="Gate CI on deadlines" data-duration="1" hidden>
+  <p><code>latencylens report</code> exits with status 1 when a deadline was missed, 0 when every job made it,
+  and 2 on errors, so a trace captured by your test rig can fail a build:</p>
+  <div class="block"><span class="tag">Host terminal</span><pre class="cmd">latencylens report brakesim.kev --deadlines brakesim.deadlines.yaml --format md &gt; report.md; echo "exit status $?"
+latencylens report fixed.kev --deadlines brakesim.deadlines.yaml --format md &gt; report.md; echo "exit status $?"</pre></div>
+  <div class="block"><span class="tag">Expected output</span><pre class="out">exit status 1
+exit status 0</pre></div>
+  <p><code>--fail-on any</code> fails on any finding, <code>--fail-on none</code> only reports, and
+  <code>--format json</code> gives machine-readable findings with their evidence. In a GitHub Actions job:</p>
+  <div class="block"><span class="tag">.github/workflows/timing.yml (excerpt)</span><pre class="src">- name: Check the captured trace against the deadlines
+  run: node latencylens/bin/latencylens.mjs report trace.kev --deadlines deadlines.yaml --format md &gt;&gt; "$GITHUB_STEP_SUMMARY"</pre></div>
+</section>
+
+<!-- 13 ----------------------------------------------------------------------------------------->
+<section class="step" data-label="Congratulations" data-duration="0" hidden>
+  <div class="hero">
+    <svg viewBox="0 0 220 170" role="img" aria-label="Capy the capybara, relaxed"><use href="#capy"/></svg>
+    <p>You found a priority inversion in a QNX kernel trace, fixed it with one line, and proved the fix
+    with a second trace. Capy approves.</p>
+  </div>
+  <h3>What you've learned</h3>
+  <ul>
+    <li><code>tracelogger -w</code> records thread states with priorities, kernel calls with arguments,
+    interrupts and messages, and <code>TraceEvent()</code> adds your own markers.</li>
+    <li>A priority inversion is a high-priority thread blocked on a lock whose low-priority holder is kept
+    off the CPU by a medium-priority thread. <code>PTHREAD_PRIO_INHERIT</code>, QNX's default, prevents it.</li>
+    <li>Not every late job is a scheduling bug: platform latency looks different in a trace, and Latency
+    Lens says which one you have.</li>
+  </ul>
+  <h3>Clean up</h3>
+  <div class="block"><span class="tag">Host terminal</span><pre class="cmd">qnx-vm stop</pre></div>
+  <h3>Keep going</h3>
+  <ul>
+    <li>The other sample traces show the other detectors: IST latency (<code>ist-latency.kev</code>),
+    send-blocked chains between message-passing servers (<code>send-chain.kev</code>) and a CPU hog
+    (<code>cpu-hog.kev</code>), all in <code>samples/traces/</code>.</li>
+    <li>The <a href="https://www.qnx.com/developers/docs/8.0/com.qnx.doc.sat/topic/about.html">System Analysis Toolkit guide</a>
+    describes every trace event class, and
+    <a href="https://www.qnx.com/developers/docs/8.0/com.qnx.doc.neutrino.lib_ref/topic/p/pthread_mutexattr_setprotocol.html">pthread_mutexattr_setprotocol()</a>
+    the mutex protocols.</li>
+    <li>Latency Lens on GitHub: <a href="https://github.com/chinesepowered/hack-qnx-latencylens">chinesepowered/hack-qnx-latencylens</a>.</li>
+  </ul>
+</section>
+
+</div>
+<div class="controls"><button id="prev" type="button">Back</button><button id="next" type="button">Next</button></div>
+</main>
+<script src="codelab.js"></script>
+</body>
+</html>

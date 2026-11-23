@@ -3,8 +3,11 @@
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
+import { loadConfig } from '../src/config/deadlines.js';
+import { analyse } from '../src/detect/index.js';
 import { classLabel, eventLabel } from '../src/kev/constants.js';
 import { readKev } from '../src/kev/reader.js';
+import { buildModel } from '../src/model/model.js';
 import { tracePath } from './helpers.js';
 
 describe('stress trace (1.27M events)', () => {
@@ -28,5 +31,19 @@ describe('stress trace (1.27M events)', () => {
     expect(trace.stats.droppedEvents).toBe(0);
     console.log(`readKev: ${e.n} events from ${(raw.length / 1e6).toFixed(1)} MB in ${ms.toFixed(0)} ms`);
     expect(ms).toBeLessThan(5000);
+
+    // The whole analysis of a million events stays in seconds, and procnto's own threads are never
+    // blamed for an IST's latency (a user cannot reprioritise them): those delays become notes.
+    const t1 = performance.now();
+    const m = buildModel(trace);
+    const a = analyse(m, loadConfig(tracePath('stress.deadlines.yaml')));
+    expect(performance.now() - t1).toBeLessThan(15_000);
+    const kinds = a.findings.map((f) => f.kind);
+    expect(kinds).toContain('deadline-miss');
+    expect(kinds).toContain('priority-inversion');
+    for (const f of a.findings.filter((x) => x.kind === 'ist-latency')) {
+      expect(f.threads.slice(1).every((th) => !m.threads[th].isKernel)).toBe(true);
+    }
+    expect(a.notes.some((n) => n.includes("procnto's own") && n.includes('kernel time'))).toBe(true);
   }, 60_000);
 });

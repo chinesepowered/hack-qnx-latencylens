@@ -1,0 +1,31 @@
+# Type check, tests (parser conformance against traceprinter, every detector, the claim checker),
+# build, and the deadline gate on the committed QNX OS 8.0 sample traces.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - name: Deadline gate on the sample traces
+        run: |
+          # the buggy capture must fail the gate (exit status 1), the fixed one must pass
+          set +e
+          node bin/latencylens.mjs report samples/traces/inversion.kev --format summary
+          test $? -eq 1 || exit 1
+          set -e
+          node bin/latencylens.mjs report samples/traces/inversion-fixed.kev --format md >> "$GITHUB_STEP_SUMMARY"
