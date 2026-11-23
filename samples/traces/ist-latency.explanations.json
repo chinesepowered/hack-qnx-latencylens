@@ -1,0 +1,9 @@
+{
+  "ist-latency-1": {
+    "text": "CAUSE: The 10.8 ms latency occurred because the higher-priority thread sensor_ist/video_enc (priority 50) was running on CPU 0 when interrupt 8 was delivered at 1.617 ms. Since QNX uses SCHED_FIFO, the priority 40 thread sensor_ist/adc_ist could not preempt video_enc and remained in the READY state until video_enc voluntarily blocked in NANOSLEEP at 12.383 ms. This resulted in adc_ist only becoming RUNNING at 12.401 ms, causing the significant delay relative to the 1.00 ms threshold.\nFIX: Increase the priority of sensor_ist/adc_ist to a value higher than 50, such as 60, to ensure it can preempt sensor_ist/video_enc immediately upon interrupt delivery. Alternatively, if video_enc must retain priority 50, reduce its execution time or ensure it blocks frequently enough to prevent long preemption windows for lower-priority interrupt service threads.",
+    "model": "Qwen/Qwen3.8-27B",
+    "ms": 1874.826116,
+    "usedFallback": false,
+    "recordedAt": "2026-11-23T20:09:45.755Z"
+  }
+}

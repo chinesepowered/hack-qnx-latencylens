@@ -1,0 +1,23 @@
+{
+  "cpu-hog-1": {
+    "text": "CAUSE: The thread cpu_hog/diag_scan runs at priority 40, which is higher than the priorities of cpu_hog/can_rx (25), io-sock/clock (0) (21), and cpu_hog/sensor_poll (20). Because SCHED_FIFO scheduling gives the CPU to the highest-priority ready thread, diag_scan monopolized CPU 0 for 430 ms, preventing the lower-priority threads from executing even though they were in the READY state. This resulted in diag_scan consuming 97.9% of the CPU during the episode.\nFIX: Reduce the priority of cpu_hog/diag_scan to a value lower than the critical threads (e.g., below 20) or implement a time-slicing mechanism to limit its execution time. Alternatively, if diag_scan must remain at high priority, ensure it yields control or uses a lower-priority worker thread for non-critical scanning tasks.",
+    "model": "Qwen/Qwen3.8-27B",
+    "ms": 1615.367353,
+    "usedFallback": false,
+    "recordedAt": "2026-11-23T20:09:52.685Z"
+  },
+  "deadline-miss-1": {
+    "text": "CAUSE: The sensor_poll thread (priority 20) was blocked in the READY state for 437 ms because higher-priority threads, specifically cpu_hog/diag_scan (priority 40) and cpu_hog/can_rx (priority 25), monopolized the CPU. The trace shows diag_scan running for 421 ms and can_rx for 15.2 ms during this interval, preventing sensor_poll from executing despite its 5.00 ms deadline. This priority inversion caused the worst-case response time to reach 438 ms, resulting in 537 missed deadlines out of 600 jobs.\nFIX: Reduce the execution time of cpu_hog/diag_scan and cpu_hog/can_rx by optimizing their code or splitting them into smaller, lower-priority tasks. Alternatively, lower the priority of diag_scan and can_rx to below 20 if their timing requirements allow, ensuring sensor_poll can run within its 5.00 ms deadline.",
+    "model": "Qwen/Qwen3.8-27B",
+    "ms": 2064.526222,
+    "usedFallback": false,
+    "recordedAt": "2026-11-23T20:09:54.934Z"
+  },
+  "deadline-miss-2": {
+    "text": "CAUSE: The `cpu_hog/can_rx` thread (priority 25) was blocked in the READY state for 422 ms because the higher-priority `cpu_hog/diag_scan` thread (priority 40) monopolized the CPU. The trace shows `diag_scan` running continuously from 2.025 ms to 423.507 ms, preventing `can_rx` from executing despite its 10.0 ms deadline. Although `procnto-smp-instr/clock_cpu_0` (priority 254) also preempted the CPU, its total execution time of 373 us was negligible compared to the 421 ms consumed by `diag_scan`.\nFIX: Reduce the execution time of `cpu_hog/diag_scan` or lower its priority to below 25 to ensure it does not starve `can_rx`. Alternatively, if `diag_scan` must remain at priority 40, implement a time-slicing mechanism or move `diag_scan` to a different CPU core to prevent it from blocking the critical CAN receive path.",
+    "model": "Qwen/Qwen3.8-27B",
+    "ms": 2052.7186039999997,
+    "usedFallback": false,
+    "recordedAt": "2026-11-23T20:09:57.211Z"
+  }
+}

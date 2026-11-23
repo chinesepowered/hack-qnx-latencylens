@@ -5,7 +5,7 @@
 
 import { ST, firstRunEndingAfter, type Model } from '../model/model.js';
 import type { DetectorOptions, Fact, Finding, Instance } from './types.js';
-import { collectEvidence, fmtDur, fmtTime, plural, threadShort } from './util.js';
+import { collectEvidence, cpuOccupants, fmtDur, fmtTime, plural, threadShort } from './util.js';
 
 type Kind = 'SEND' | 'REPLY' | 'MUTEX';
 
@@ -233,18 +233,46 @@ export function detectChains(m: Model, opts: DetectorOptions, notes: string[] = 
     const threads = [...new Set(involved)];
     const name = threadShort(m, root);
     const rootPrio = m.threads[root].basePrio;
+    // Servers in the chain run at the client's priority; who kept them off the CPU?
+    const preempted: { th: number; ready: number; by: number; byPrio: number; byNs: number; cpu: number }[] = [];
+    for (const th of new Set(dominant.hops.map((h) => h.to).filter((x) => x >= 0))) {
+      const r = m.threads[th].runs;
+      let ready = 0;
+      const by = new Map<number, { ns: number; prio: number; cpu: number }>();
+      for (let k = firstRunEndingAfter(r, w.a); k < r.n && r.start[k] < w.b; k++) {
+        if (r.state[k] !== ST.READY) continue;
+        const a = Math.max(w.a, r.start[k]);
+        const b = Math.min(w.b, r.end[k]);
+        if (b <= a) continue;
+        ready += b - a;
+        const my = r.prio[k] >= 0 ? r.prio[k] : m.threads[th].basePrio;
+        for (const o of cpuOccupants(m, r.cpu[k], a, b, new Set([th]))) {
+          if (o.prio < my) continue;
+          const x = by.get(o.thread) ?? { ns: 0, prio: o.prio, cpu: r.cpu[k] };
+          x.ns += o.ns;
+          by.set(o.thread, x);
+        }
+      }
+      const top = [...by.entries()].sort((p, q) => q[1].ns - p[1].ns)[0];
+      if (top && ready >= Math.max(1e6, 0.1 * dur)) preempted.push({ th, ready, by: top[0], byPrio: top[1].prio, byNs: top[1].ns, cpu: top[1].cpu });
+    }
+    const preemptText = preempted
+      .map((p) => `${threadShort(m, p.th)} was ready but not running for ${fmtDur(p.ready)}, mostly while ${threadShort(m, p.by)} (priority ${p.byPrio}) used CPU ${p.cpu}`)
+      .join('; ');
     const chainText = dominant.hops.map((h) => hopText(m, h)).join(', then ');
     const end = dominant.hops[dominant.hops.length - 1];
     const summary =
       `${m.threads[root].label} (priority ${rootPrio}) waited ${fmtDur(dur)} for one request, starting at ${fmtTime(w.a)}. ` +
       `For ${fmtDur(w.deepNs)} of that it was at the head of a chain ${w.maxDepth} servers deep: ${chainText}. ` +
       `Time on each hop: ${hops.slice(0, 5).map((h) => `${hopText(m, h.hop)} ${fmtDur(h.ns)}`).join('; ')}. ` +
+      (preemptText ? `Inside the chain, ${preemptText}: the servers run at ${name}'s priority ${rootPrio}, so anything above it delays the whole request. ` : '') +
       (w.cycle ? 'The chain loops back on itself: this is a deadlock. ' : '') +
       `${plural(list.length, 'request')} waited longer than ${fmtDur(opts.chainWaitNs)} through a chain like this (median ${fmtDur(median)}).`;
     const busy = dominant.hops.find((h) => h.kind === 'SEND' && h.busyWith >= 0);
-    const hint = busy
+    let hint = busy
       ? `${threadShort(m, busy.to)} serves one request at a time, so ${threadShort(m, busy.from)} queues behind ${threadShort(m, busy.busyWith)}. Give the server a pool of threads (or a dedicated channel for latency-critical clients), shorten its work per request, or cache ${threadShort(m, end.to >= 0 ? end.to : end.from)}'s results.`
       : `Shorten the chain: make ${threadShort(m, end.to >= 0 ? end.to : end.from)} answer faster, or let ${name} use cached data instead of a synchronous request on its critical path.`;
+    if (preempted.length) hint += ` If ${name} is latency-critical, run it above ${threadShort(m, preempted[0].by)} (priority ${preempted[0].byPrio}): its servers inherit its priority.`;
     const facts: Fact[] = [
       { key: 'rootPrio', label: `${name} priority`, kind: 'priority', value: rootPrio, thread: root },
       { key: 'wait', label: `${name} total wait (worst request)`, kind: 'duration', value: dur },
@@ -255,6 +283,11 @@ export function detectChains(m: Model, opts: DetectorOptions, notes: string[] = 
       { key: 'threshold', label: 'chain wait threshold', kind: 'duration', value: opts.chainWaitNs },
     ];
     for (const h of hops.slice(0, 6)) facts.push({ key: `hop:${h.hop.from}:${h.hop.kind}:${h.hop.to}`, label: hopText(m, h.hop), kind: 'duration', value: h.ns });
+    for (const p of preempted) {
+      if (!threads.includes(p.by)) threads.push(p.by);
+      facts.push({ key: `ready:${p.th}`, label: `${threadShort(m, p.th)} ready but not running`, kind: 'duration', value: p.ready });
+      facts.push({ key: `preempt:${p.by}`, label: `${threadShort(m, p.by)} ran meanwhile`, kind: 'duration', value: p.byNs });
+    }
     for (const th of threads) facts.push({ key: `prio:${th}`, label: `${threadShort(m, th)} priority`, kind: 'priority', value: m.threads[th].basePrio, thread: th });
     const pad = Math.min(2e6, dur * 0.1);
     const t0 = Math.max(0, w.a - pad);

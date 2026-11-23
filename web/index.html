@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Latency Lens</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true"><circle cx="13" cy="13" r="9" fill="none" stroke="#58a6ff" stroke-width="3"/><path d="M19.5 19.5 L28 28" stroke="#58a6ff" stroke-width="3.5" stroke-linecap="round"/><path d="M8 15 h3 l1.5 -5 l2 8 l1.5 -3 h3" fill="none" stroke="#3fb950" stroke-width="1.8" stroke-linejoin="round"/></svg>
+    <span class="brand-name">Latency Lens</span></div>
+  <div class="trace"><span id="trace-name"></span><span id="trace-meta"></span></div>
+  <div class="actions">
+    <button id="btn-fit" title="Fit the whole trace (F)">Fit</button>
+    <button id="btn-kernel" title="Show procnto's kernel threads">Kernel threads</button>
+    <button id="btn-help" title="Keyboard and mouse (?)">?</button>
+  </div>
+</header>
+<div class="overview-wrap"><canvas id="overview"></canvas></div>
+<div class="legend">
+  <span><i style="background:#3fb950"></i>running</span>
+  <span><i style="background:#e3b341"></i>ready (preempted)</span>
+  <span><i style="background:#f85149"></i>mutex</span>
+  <span><i style="background:#58a6ff"></i>send-blocked</span>
+  <span><i style="background:#a371f7"></i>reply-blocked</span>
+  <span><i style="background:#39c5cf"></i>interrupt wait</span>
+  <span><i style="background:#db61a2"></i>condvar / semaphore</span>
+  <span><i style="background:#2b3442"></i>sleep</span>
+  <span><i style="background:#3d4a5c"></i>receive</span>
+  <span class="lg-arrow"><b style="color:#58a6ff">→</b>MsgSend to MsgReceive <b style="color:#a371f7">⇠</b>MsgReply</span>
+</div>
+<main>
+  <div class="timeline-wrap"><canvas id="timeline"></canvas></div>
+  <aside id="panel">
+    <div class="panel-head">Findings <span id="findings-count" class="count">0</span></div>
+    <div id="findings"></div>
+    <div id="notes"></div>
+    <div id="detail"></div>
+  </aside>
+</main>
+<footer class="status"><span id="status-left"></span><span id="status-right"></span></footer>
+<div id="help" role="dialog" aria-label="Help">
+  <div class="help-card">
+    <h2>Reading the timeline</h2>
+    <p>One lane per CPU (which thread ran) and per thread (what state it was in). Tall green is work, amber is ready but waiting for a CPU, thin bars are blocked states. Cyan ticks on CPU lanes are interrupts. Zoomed in, blue arrows go from MsgSend() to MsgReceive() and dashed purple arrows are the MsgReply().</p>
+    <table>
+      <tr><td>Scroll</td><td>zoom at the cursor</td></tr>
+      <tr><td>Drag</td><td>pan (and scroll lanes)</td></tr>
+      <tr><td>Shift + drag</td><td>zoom to a range</td></tr>
+      <tr><td>Double-click</td><td>zoom in 4x (Shift: out)</td></tr>
+      <tr><td>Scroll on labels</td><td>scroll lanes</td></tr>
+      <tr><td>W / S, A / D</td><td>zoom, pan</td></tr>
+      <tr><td>F</td><td>fit the whole trace</td></tr>
+      <tr><td>1 to 9</td><td>open a finding</td></tr>
+      <tr><td>N / P</td><td>next / previous occurrence</td></tr>
+      <tr><td>E</td><td>explain the open finding</td></tr>
+      <tr><td>Esc</td><td>close</td></tr>
+    </table>
+  </div>
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

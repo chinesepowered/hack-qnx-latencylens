@@ -1,0 +1,16 @@
+{
+  "send-chain-1": {
+    "text": "CAUSE: The 13.4 ms latency is caused by a priority inversion where the low-priority client `send_chain/route_planner` (priority 15) is blocked waiting for replies from `send_chain/map_db` and `send_chain/flash_io` (both priority 20). Although QNX message passing temporarily boosts the server to the client's priority, the trace shows `send_chain/map_db` running at its base priority 20 for significant durations (e.g., 3.252 ms to 10.701 ms), indicating it is not being boosted to priority 15 or is being preempted by other priority 20 work. This forces the high-priority flash I/O operations to complete at priority 20, delaying the reply chain back to `route_planner`.\nFIX: Increase the base priority of `send_chain/flash_io` and `send_chain/map_db` to be higher than `send_chain/route_planner` (e.g., priority 25) to ensure the I/O path is not starved by other priority 20 threads. Alternatively, if the flash I/O is the bottleneck, optimize the `flash_io` handler to reduce the 7.21 ms processing time or move the flash access to a dedicated high-priority thread that pre-fetches data.",
+    "model": "Qwen/Qwen3.8-27B",
+    "ms": 2534.4434309999997,
+    "usedFallback": false,
+    "recordedAt": "2026-11-23T20:09:48.452Z"
+  },
+  "send-chain-2": {
+    "text": "CAUSE: The 33.0 ms latency for send_chain/hmi is caused by a deep message-passing chain where send_chain/nav_server is blocked waiting for send_chain/map_db, which is in turn blocked waiting for send_chain/flash_io. The trace shows send_chain/nav_server spending 8.04 ms SEND-blocked because send_chain/map_db was busy processing a request from send_chain/route_planner, and send_chain/map_db spending 6.89 ms REPLY-blocked on send_chain/flash_io. This cumulative blocking across three levels of the chain (hmi -> nav_server -> map_db -> flash_io) results in the observed worst-case wait, with 59 requests exceeding the 5.00 ms threshold.\nFIX: Break the dependency chain by having send_chain/nav_server cache map data locally or use asynchronous pre-fetching to avoid blocking on send_chain/map_db. Alternatively, increase the priority of send_chain/flash_io to ensure it completes flash operations faster, reducing the REPLY-block time for send_chain/map_db.",
+    "model": "Qwen/Qwen3.8-27B",
+    "ms": 2210.102562,
+    "usedFallback": false,
+    "recordedAt": "2026-11-23T20:09:50.831Z"
+  }
+}

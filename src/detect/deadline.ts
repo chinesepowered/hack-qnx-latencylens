@@ -223,10 +223,12 @@ export function detectDeadlineMisses(m: Model, specs: DeadlineSpec[], opts: Dete
       const parts: string[] = [`it ran for ${fmtDur(w.running)}`];
       if (mutexNs > 0 && holder) parts.push(`waited ${fmtDur(mutexNs)} for a mutex held by ${threadShort(m, holder.holder)}${holder.holder >= 0 ? ` (priority ${m.threads[holder.holder].basePrio})` : ''}`);
       if (sendNs > 0 && server) parts.push(`waited ${fmtDur(sendNs)} on a message to ${threadShort(m, server.server)}`);
-      if (w.ready > 0) parts.push(`was ready but not running for ${fmtDur(w.ready)}${top ? `, mostly while ${threadShort(m, top.thread)} (priority ${top.prio}) used its CPU` : ''}`);
-      for (const [s, ns] of w.blocked) if (s !== ST.MUTEX && s !== ST.SEND && s !== ST.REPLY && ns > 0) parts.push(`was blocked in ${stateName(s)} for ${fmtDur(ns)}`);
+      const material = (ns: number) => ns >= Math.max(200_000, 0.02 * w.response);
+      const preempted = w.ready - w.unexplained;
+      if (material(preempted)) parts.push(`was ready but not running for ${fmtDur(preempted)}${top ? `, mostly while ${threadShort(m, top.thread)} (priority ${top.prio}) used its CPU` : ''}`);
+      for (const [s, ns] of w.blocked) if (s !== ST.MUTEX && s !== ST.SEND && s !== ST.REPLY && material(ns)) parts.push(`was blocked in ${stateName(s)} for ${fmtDur(ns)}`);
 
-      if (w.unexplained > 0) parts.push(`was ready for ${fmtDur(w.unexplained)} while no thread of equal or higher priority used its CPU (platform latency)`);
+      if (material(w.unexplained)) parts.push(`was ready for ${fmtDur(w.unexplained)} while no thread of equal or higher priority used its CPU (platform latency)`);
       // A late job that inherited a backlog: find the job that started it.
       let backlogNote = '';
       let rootCause = '';
