@@ -1,0 +1,95 @@
+<!doctype html>
+<!-- Terminal stage for the demo video: replays recorded asciicast sessions with xterm.js.
+     Copyright (C) 2026 chinesepowered. SPDX-License-Identifier: AGPL-3.0-or-later -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Latency Lens terminal</title>
+<link rel="stylesheet" href="../../node_modules/@xterm/xterm/css/xterm.css">
+<style>
+  html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; font-family: Inter, system-ui, sans-serif; }
+  body { background: radial-gradient(1400px 800px at 25% 15%, #12233f 0%, #0a0f18 55%, #06080c 100%); }
+  #bg { position: absolute; inset: 0; background-size: 1920px 1080px; display: none; }
+  #bg.on { display: block; }
+  #bg.on::after { content: ''; position: absolute; inset: 0; background: rgba(1, 4, 9, 0.45); }
+  .win { position: absolute; border-radius: 12px; background: #0d1117; border: 1px solid #30363d; overflow: hidden;
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.03) inset; }
+  .bar { height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 16px; background: #161b22; border-bottom: 1px solid #262c36; }
+  .dot { width: 13px; height: 13px; border-radius: 50%; flex: none; }
+  .title { flex: 1; text-align: center; color: #9da7b3; font-size: 15px; font-weight: 500; margin-right: 58px; white-space: nowrap; }
+  .title b { color: #e6edf3; font-weight: 600; }
+  .term { padding: 14px 18px 16px; }
+  .xterm .xterm-viewport { overflow: hidden !important; background: #0d1117 !important; }
+  #caption { position: absolute; left: 0; right: 0; text-align: center; color: #c9d1d9; font-size: 23px; letter-spacing: 0.1px; }
+  #caption .sep { color: #484f58; margin: 0 12px; }
+  #caption b { color: #f0f6fc; font-weight: 600; }
+  #badge { position: absolute; display: flex; gap: 10px; align-items: center; font-size: 15px; color: #9da7b3; }
+  #badge span { border: 1px solid #30363d; background: rgba(22, 27, 34, 0.85); border-radius: 999px; padding: 4px 12px; }
+  #badge span.qnx { border-color: #1f6feb; color: #cae1ff; }
+</style>
+</head>
+<body>
+<div id="bg"></div>
+<div class="win" id="win">
+  <div class="bar"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span><span class="title" id="title"></span></div>
+  <div class="term" id="term"></div>
+</div>
+<div id="badge"></div>
+<div id="caption"></div>
+<script src="../../node_modules/@xterm/xterm/lib/xterm.js"></script>
+<script>
+  let term = null;
+  const THEME = {
+    background: '#0d1117', foreground: '#e6edf3', cursor: '#58a6ff', cursorAccent: '#0d1117', selectionBackground: '#264f78',
+    black: '#484f58', red: '#ff7b72', green: '#3fb950', yellow: '#d29922', blue: '#58a6ff', magenta: '#bc8cff', cyan: '#39c5cf', white: '#b1bac4',
+    brightBlack: '#6e7681', brightRed: '#ffa198', brightGreen: '#56d364', brightYellow: '#e3b341', brightBlue: '#79c0ff', brightMagenta: '#d2a8ff', brightCyan: '#56d4dd', brightWhite: '#f0f6fc',
+  };
+  /** o: { cols, rows, fontSize, title, caption, badges, pip: { right, bottom } | null, background: url | null } */
+  window.__setup = async (o) => {
+    await document.fonts.load(`${o.fontSize}px "JetBrains Mono"`);
+    await document.fonts.load(`bold ${o.fontSize}px "JetBrains Mono"`);
+    term = new Terminal({
+      cols: o.cols, rows: o.rows, fontSize: o.fontSize, fontFamily: '"JetBrains Mono", "DejaVu Sans Mono", monospace',
+      lineHeight: o.lineHeight ?? 1.12, cursorBlink: false, cursorStyle: 'block', scrollback: 0, theme: THEME, allowProposedApi: true,
+      customGlyphs: true, drawBoldTextInBrightColors: false,
+    });
+    term.open(document.getElementById('term'));
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const win = document.getElementById('win');
+    const w = win.offsetWidth;
+    const h = win.offsetHeight;
+    if (o.background) {
+      const bg = document.getElementById('bg');
+      bg.style.backgroundImage = `url(${o.background})`;
+      bg.classList.add('on');
+    }
+    let left;
+    let top;
+    if (o.pip) {
+      left = 1920 - w - o.pip.right;
+      top = 1080 - h - o.pip.bottom;
+    } else {
+      left = Math.round((1920 - w) / 2);
+      top = Math.round((1080 - h) / 2) - (o.caption ? 34 : 0);
+    }
+    win.style.left = `${left}px`;
+    win.style.top = `${top}px`;
+    document.getElementById('title').innerHTML = o.title ?? '';
+    const cap = document.getElementById('caption');
+    cap.innerHTML = o.caption ?? '';
+    cap.style.top = `${top + h + 34}px`;
+    const badge = document.getElementById('badge');
+    badge.innerHTML = (o.badges ?? []).map((b) => `<span class="${b.cls ?? ''}">${b.text}</span>`).join('');
+    badge.style.left = `${left}px`;
+    badge.style.top = `${top - 44}px`;
+    return { left, top, w, h };
+  };
+  window.__setTitle = (html) => {
+    document.getElementById('title').innerHTML = html;
+  };
+  window.__write = (data) =>
+    new Promise((resolve) => term.write(data, () => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true)))));
+  window.__tick = () => false;
+</script>
+</body>
+</html>

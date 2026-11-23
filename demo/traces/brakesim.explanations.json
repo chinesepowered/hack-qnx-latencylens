@@ -1,0 +1,16 @@
+{
+  "priority-inversion-1": {
+    "text": "CAUSE: The mutex at 0x1c40854040 is protected by a protocol that does not raise the priority of the owner, causing a classic priority inversion. When brakesim/brake_ctl (priority 63) blocked on the mutex held by brakesim/logger (priority 10), the scheduler allowed brakesim/telemetry (priority 30) to run, delaying the logger for 72.9 ms. This prevented the high-priority brake control thread from acquiring the lock until the medium-priority telemetry thread finished its work.\nFIX: Change the mutex creation attributes to use PTHREAD_PRIO_INHERIT so that the logger temporarily inherits the priority 63 of the waiting brake_ctl thread. This will preempt the telemetry thread and allow the logger to release the mutex immediately, eliminating the 72.9 ms inversion.",
+    "model": "Qwen/Qwen3.8-27B",
+    "ms": 2427.373934000003,
+    "usedFallback": false,
+    "recordedAt": "2026-11-23T21:14:36.665Z"
+  },
+  "deadline-miss-1": {
+    "text": "CAUSE: The `brakesim/brake_ctl` thread (priority 63) was blocked for 74.4 ms waiting to acquire a mutex held by the low-priority `brakesim/logger` thread (priority 10). Because the mutex does not appear to be using priority inheritance, the logger continued to run at its base priority of 10, preventing the higher-priority brake controller from executing until the logger voluntarily released the lock. This caused the worst-case response time to reach 75.4 ms, significantly exceeding the 15.0 ms deadline.\nFIX: Change the mutex creation attributes to use `PTHREAD_PRIO_INHERIT` so that the `brakesim/logger` thread temporarily inherits the priority of `brakesim/brake_ctl` while holding the lock. Alternatively, reduce the critical section length in the logger to minimize the blocking time for the real-time control thread.",
+    "model": "Qwen/Qwen3.8-27B",
+    "ms": 1722.4683630000002,
+    "usedFallback": false,
+    "recordedAt": "2026-11-23T20:20:22.464Z"
+  }
+}

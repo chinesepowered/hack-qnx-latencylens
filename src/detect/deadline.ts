@@ -189,6 +189,14 @@ function jobsFromStates(m: Model, th: number, waitState: number): Job[] {
   return jobs;
 }
 
+/** Every complete job of thread `th`: from TraceEvent() job markers when the thread logs them, else from its state changes. */
+export function jobsForThread(m: Model, th: number, spec: DeadlineSpec): Job[] {
+  const begin = spec.markers?.begin ?? 100;
+  const end = spec.markers?.end ?? 101;
+  const hasMarkers = m.markers.some((x) => x.thread === th && x.code === begin);
+  return hasMarkers ? jobsFromMarkers(m, th, spec, begin, end) : jobsFromStates(m, th, spec.waitState ?? guessWaitState(m, th));
+}
+
 export function detectDeadlineMisses(m: Model, specs: DeadlineSpec[], opts: DetectorOptions, notes: string[]): Finding[] {
   const findings: Finding[] = [];
   for (const spec of specs) {
@@ -199,11 +207,7 @@ export function detectDeadlineMisses(m: Model, specs: DeadlineSpec[], opts: Dete
     }
     for (const T of matches) {
       const th = T.index;
-      const begin = spec.markers?.begin ?? 100;
-      const end = spec.markers?.end ?? 101;
-      const hasMarkers = m.markers.some((x) => x.thread === th && x.code === begin);
-      const waitState = spec.waitState ?? guessWaitState(m, th);
-      const jobs = hasMarkers ? jobsFromMarkers(m, th, spec, begin, end) : jobsFromStates(m, th, waitState);
+      const jobs = jobsForThread(m, th, spec);
       if (!jobs.length) {
         notes.push(`deadlines: ${T.label} has no complete job in this trace`);
         continue;

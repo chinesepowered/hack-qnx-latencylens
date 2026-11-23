@@ -19,7 +19,7 @@ $(OUT)/brakesim: src/brakesim.c src/ll_common.h | $(OUT)
 	$(QCC) -V$(TARGET) $(CFLAGS) -o $@ $<
 
 $(OUT)/brakesim-fixed: src/brakesim.c src/ll_common.h | $(OUT)
-	$(QCC) -V$(TARGET) $(CFLAGS) -DBRAKESIM_FIXED -o $@ $<
+	$(QCC) -V$(TARGET) $(CFLAGS) -DLOG_LOCK_PROTOCOL=PTHREAD_PRIO_INHERIT -o $@ $<
 
 $(OUT)/%: src/%.c src/ll_common.h | $(OUT)
 	$(QCC) -V$(TARGET) $(CFLAGS) -o $@ $<

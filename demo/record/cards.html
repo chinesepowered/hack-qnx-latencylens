@@ -1,0 +1,235 @@
+<!doctype html>
+<!-- Title, outro and thumbnail cards for the demo video. The intro chart and the scrolling trace are
+     real data from the demo capture, passed in by the director.
+     Copyright (C) 2026 chinesepowered. SPDX-License-Identifier: AGPL-3.0-or-later -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Latency Lens cards</title>
+<style>
+  html, body { margin: 0; overflow: hidden; font-family: Inter, system-ui, sans-serif; color: #e6edf3; }
+  body { width: 1920px; height: 1080px; background: radial-gradient(1400px 900px at 50% 30%, #0f1d33 0%, #090d14 58%, #05070a 100%); }
+  .mode { display: none; position: absolute; inset: 0; }
+  body[data-mode="intro"] #intro, body[data-mode="outro"] #outro, body[data-mode="thumb"] #thumb { display: block; }
+  .mono { font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace; }
+
+  /* intro: chart */
+  #chart { position: absolute; left: 160px; top: 170px; width: 1600px; }
+  #chart h1 { margin: 0 0 6px; font-size: 40px; font-weight: 700; letter-spacing: -0.4px; }
+  #chart .sub { font-size: 22px; color: #8b949e; margin-bottom: 26px; }
+  #chart .count { position: absolute; right: 0; top: 4px; text-align: right; font-size: 24px; color: #8b949e; }
+  #chart .count b { font-size: 64px; color: #ff7b72; font-weight: 800; letter-spacing: -1px; display: block; line-height: 1; }
+  #chart svg text { font-family: Inter, system-ui, sans-serif; }
+  /* intro: the raw trace */
+  #wall { position: absolute; inset: 0; overflow: hidden; opacity: 0; }
+  #wall pre { margin: 0; padding: 0 60px; font-size: 17px; line-height: 22px; color: #6e7681; white-space: pre; }
+  #wall pre .c-thread { color: #58a6ff; } #wall pre .c-kc { color: #a371f7; } #wall pre .c-int { color: #39c5cf; }
+  #wall pre .c-comm { color: #d29922; } #wall pre .c-user { color: #3fb950; } #wall pre .c-hot { color: #e6edf3; }
+  #wallfade { position: absolute; inset: 0; background: linear-gradient(#05070a 0%, rgba(5,7,10,0) 18%, rgba(5,7,10,0) 82%, #05070a 100%); }
+  #evcount { position: absolute; left: 0; right: 0; top: 452px; text-align: center; opacity: 0; }
+  #evcount div { display: inline-block; padding: 22px 46px; border-radius: 18px; background: rgba(5, 7, 10, 0.86); border: 1px solid #30363d; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+  #evcount b { font-size: 86px; font-weight: 800; letter-spacing: -2px; font-variant-numeric: tabular-nums; }
+  #evcount span { display: block; font-size: 26px; color: #8b949e; margin-top: 2px; }
+  /* intro and outro: the title */
+  .brand { display: flex; align-items: center; justify-content: center; gap: 30px; }
+  .brand svg { width: 132px; height: 132px; }
+  .brand h1 { margin: 0; font-size: 128px; font-weight: 800; letter-spacing: -3px; }
+  #ititle { position: absolute; left: 0; right: 0; top: 345px; text-align: center; opacity: 0; }
+  #ititle .tag { font-size: 42px; color: #c9d1d9; margin-top: 30px; font-weight: 500; }
+  #ititle .tag2 { font-size: 28px; color: #8b949e; margin-top: 18px; }
+
+  /* outro */
+  #outro .brand { margin-top: 200px; }
+  #outro .brand svg { width: 104px; height: 104px; }
+  #outro .brand h1 { font-size: 104px; }
+  #outro .tag { text-align: center; font-size: 36px; color: #c9d1d9; margin-top: 22px; }
+  .rows { width: 1440px; margin: 64px auto 0; display: grid; gap: 22px; }
+  .row .v.mono { font-size: 30px; }
+  .row { display: grid; grid-template-columns: 280px 1fr; align-items: center; gap: 28px; padding: 20px 30px; border: 1px solid #262c36; border-radius: 16px; background: rgba(22, 27, 34, 0.75); opacity: 0; }
+  .row .k { font-size: 24px; color: #8b949e; font-weight: 600; }
+  .row .v { font-size: 33px; color: #f0f6fc; }
+  .row .v small { display: block; font-size: 22px; color: #8b949e; margin-top: 4px; }
+  #credits { position: absolute; left: 0; right: 0; bottom: 56px; text-align: center; font-size: 21px; color: #6e7681; opacity: 0; }
+
+  /* thumbnail, 1280x720 */
+  #thumb { width: 1280px; height: 720px; background: radial-gradient(900px 600px at 20% 20%, #13284a 0%, #090d14 60%, #05070a 100%); overflow: hidden; }
+  #thumb .left { position: absolute; left: 64px; top: 92px; width: 560px; }
+  #thumb .brand { justify-content: flex-start; gap: 18px; }
+  #thumb .brand svg { width: 84px; height: 84px; }
+  #thumb .brand h1 { font-size: 70px; letter-spacing: -2px; }
+  #thumb .big { font-size: 50px; font-weight: 800; line-height: 1.08; margin-top: 38px; letter-spacing: -1px; }
+  #thumb .big em { font-style: normal; color: #ff7b72; }
+  #thumb .chips { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 36px; }
+  #thumb .chips span { font-size: 22px; padding: 7px 16px; border-radius: 999px; border: 1px solid #30363d; background: #161b22; color: #c9d1d9; }
+  #thumb .chips span.q { border-color: #1f6feb; color: #cae1ff; }
+  #thumb .shot { position: absolute; left: 330px; top: 0; width: 950px; height: 720px; background-repeat: no-repeat; }
+  #thumb .shade { position: absolute; inset: 0; background: linear-gradient(90deg, #05070a 0%, #05070a 36%, rgba(5,7,10,.86) 50%, rgba(5,7,10,.15) 72%, rgba(5,7,10,0) 100%); }
+  #thumb .left { z-index: 2; }
+</style>
+</head>
+<body data-mode="">
+<section class="mode" id="intro">
+  <div id="wall"><pre class="mono" id="wallpre"></pre><div id="wallfade"></div></div>
+  <div id="chart">
+    <h1>brake_ctl: response time of every 20 ms control job</h1>
+    <div class="sub">QNX OS 8.0 in QEMU x86_64, 150 jobs, measured from the kernel trace</div>
+    <div class="count"><b id="missed">0</b>late jobs</div>
+    <svg id="svg" width="1600" height="560" viewBox="0 0 1600 560"></svg>
+  </div>
+  <div id="evcount"><div><b id="evn">0</b><span>kernel events in 5 seconds of trace</span></div></div>
+  <div id="ititle">
+    <div class="brand"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="13" cy="13" r="9" fill="none" stroke="#58a6ff" stroke-width="3"/><path d="M19.5 19.5 L28 28" stroke="#58a6ff" stroke-width="3.5" stroke-linecap="round"/><path d="M8 15 h3 l1.5 -5 l2 8 l1.5 -3 h3" fill="none" stroke="#3fb950" stroke-width="1.8" stroke-linejoin="round"/></svg><h1>Latency Lens</h1></div>
+    <div class="tag">Why did my QNX real-time thread miss its deadline?</div>
+    <div class="tag2">Kernel trace timeline, deterministic detectors, checked AI explanations</div>
+  </div>
+</section>
+
+<section class="mode" id="outro">
+  <div class="brand"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="13" cy="13" r="9" fill="none" stroke="#58a6ff" stroke-width="3"/><path d="M19.5 19.5 L28 28" stroke="#58a6ff" stroke-width="3.5" stroke-linecap="round"/><path d="M8 15 h3 l1.5 -5 l2 8 l1.5 -3 h3" fill="none" stroke="#3fb950" stroke-width="1.8" stroke-linejoin="round"/></svg><h1>Latency Lens</h1></div>
+  <div class="tag" id="otag">Find why a QNX real-time thread missed its deadline</div>
+  <div class="rows">
+    <div class="row" id="r1"><div class="k">Open source, AGPL-3.0</div><div class="v mono">github.com/chinesepowered/hack-qnx-latencylens</div></div>
+    <div class="row" id="r2"><div class="k">Codelab</div><div class="v">Find a priority inversion on QNX in 20 minutes<small class="mono">chinesepowered.github.io/hack-qnx-latencylens</small></div></div>
+    <div class="row" id="r3"><div class="k">Built on</div><div class="v">QNX SDP 8.0, QNX OS 8.0 on QEMU x86_64, qcc, tracelogger</div></div>
+  </div>
+  <div id="credits">AI explanations: Qwen on W&amp;B Inference. Narration: ElevenLabs voice Jessica.</div>
+</section>
+
+<section class="mode" id="thumb">
+  <div class="shot" id="shot"></div>
+  <div class="shade"></div>
+  <div class="left">
+    <div class="brand"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="13" cy="13" r="9" fill="none" stroke="#58a6ff" stroke-width="3"/><path d="M19.5 19.5 L28 28" stroke="#58a6ff" stroke-width="3.5" stroke-linecap="round"/><path d="M8 15 h3 l1.5 -5 l2 8 l1.5 -3 h3" fill="none" stroke="#3fb950" stroke-width="1.8" stroke-linejoin="round"/></svg><h1>Latency Lens</h1></div>
+    <div class="big">Find the <em>priority inversion</em> behind a missed QNX deadline</div>
+    <div class="chips"><span class="q">QNX OS 8.0</span><span>tracelogger</span><span>QEMU x86_64</span><span>checked AI answers</span></div>
+  </div>
+</section>
+
+<script>
+  const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+  const ramp = (t, a, b) => clamp((t - a) / (b - a));
+  const easeOut = (u) => 1 - Math.pow(1 - u, 3);
+  let D = null;
+  let bars = [];
+
+  function buildChart(jobs, deadlineMs) {
+    const svg = document.getElementById('svg');
+    const W = 1600, H = 560, L = 70, B = 40, T = 10, maxMs = 80;
+    const y = (ms) => H - B - (Math.min(ms, maxMs) / maxMs) * (H - B - T);
+    let s = '';
+    for (const g of [0, 20, 40, 60, 80]) s += `<line x1="${L}" x2="${W}" y1="${y(g)}" y2="${y(g)}" stroke="#21262d" stroke-width="1"/><text x="${L - 14}" y="${y(g) + 7}" fill="#6e7681" font-size="20" text-anchor="end">${g}</text>`;
+    s += `<text x="${L - 14}" y="${T + 2}" fill="#6e7681" font-size="16" text-anchor="end"></text>`;
+    s += `<text transform="translate(18 ${(H - B) / 2}) rotate(-90)" fill="#8b949e" font-size="20" text-anchor="middle">response time (ms)</text>`;
+    const n = jobs.length;
+    const step = (W - L - 20) / n;
+    const bw = Math.max(3, step * 0.66);
+    jobs.forEach((j, i) => {
+      const ms = j.response / 1e6;
+      const late = ms > deadlineMs;
+      const x = L + 10 + i * step;
+      s += `<rect class="bar" x="${x.toFixed(1)}" y="${y(ms).toFixed(1)}" width="${bw.toFixed(1)}" height="${(H - B - y(ms)).toFixed(1)}" rx="1.5" fill="${late ? '#f85149' : '#3fb950'}" opacity="0" data-late="${late ? 1 : 0}"/>`;
+    });
+    s += `<line x1="${L}" x2="${W}" y1="${y(deadlineMs)}" y2="${y(deadlineMs)}" stroke="#ff7b72" stroke-width="3" stroke-dasharray="12 8"/>`;
+    s += `<text x="${W - 4}" y="${y(deadlineMs) - 12}" fill="#ff7b72" font-size="24" font-weight="700" text-anchor="end">deadline ${deadlineMs} ms</text>`;
+    s += `<text x="${L + 10}" y="${H - 6}" fill="#6e7681" font-size="18">job 1</text><text x="${W - 4}" y="${H - 6}" fill="#6e7681" font-size="18" text-anchor="end">job ${n}</text>`;
+    svg.innerHTML = s;
+    bars = [...svg.querySelectorAll('.bar')];
+  }
+
+  function colorLine(l) {
+    const e = l.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const hot = D.hotPids.some((p) => l.includes(`pid:${p} `));
+    const m = /^(t:0x[0-9a-f]+ CPU:\d\d )(\S+)(.*)$/.exec(e);
+    if (!m) return `<span class="${hot ? 'c-hot' : ''}">${e}</span>`;
+    const cls = m[2].startsWith('THREAD') ? 'c-thread' : m[2].startsWith('KER') ? 'c-kc' : m[2].startsWith('INT') ? 'c-int' : m[2].startsWith('COMM') ? 'c-comm' : m[2].startsWith('USER') ? 'c-user' : '';
+    return `${m[1]}<span class="${cls}">${m[2]}</span><span class="${hot ? 'c-hot' : ''}">${m[3]}</span>`;
+  }
+
+  window.__init = async (mode, data) => {
+    D = data;
+    document.body.dataset.mode = mode;
+    await document.fonts.load('800 40px Inter');
+    await document.fonts.load('500 40px Inter');
+    await document.fonts.load('17px "JetBrains Mono"');
+    if (mode === 'intro') {
+      buildChart(data.jobs, data.deadlineMs);
+      document.getElementById('wallpre').innerHTML = data.wall.map(colorLine).join('\n');
+    }
+    if (mode === 'thumb') {
+      const shot = document.getElementById('shot');
+      shot.style.backgroundImage = `url(${data.shot})`;
+      shot.style.backgroundSize = `${data.shotW}px ${data.shotH}px`;
+      shot.style.backgroundPosition = `${-data.cropX}px ${-data.cropY}px`;
+    }
+    if (mode === 'thumb') {
+      document.body.style.width = '1280px';
+      document.body.style.height = '720px';
+    }
+    window.__tick(0, 0);
+    return true;
+  };
+
+  /** T: video time, t: scene time (the cards animate on scene time). */
+  window.__tick = (T, t = T) => {
+    const mode = document.body.dataset.mode;
+    if (mode === 'intro') return intro(t);
+    if (mode === 'outro') return outro(t);
+    return false;
+  };
+
+  function intro(t) {
+    const x = D.marks;
+    // chart: bars appear left to right, then the chart gives way to the raw trace
+    const shown = Math.floor(easeOut(ramp(t, x.barsFrom, x.barsTo)) * bars.length);
+    let late = 0;
+    bars.forEach((b, i) => {
+      const on = i < shown;
+      b.setAttribute('opacity', on ? '1' : '0');
+      if (on && b.dataset.late === '1') late++;
+    });
+    document.getElementById('missed').textContent = `${late} of ${bars.length}`;
+    const chart = document.getElementById('chart');
+    const out = ramp(t, x.chartOut, x.chartOut + 0.7);
+    chart.style.opacity = String(1 - out);
+    chart.style.transform = `translateY(${-40 * out}px) scale(${1 - 0.04 * out})`;
+    // the raw trace scrolls past, faster than anyone can read
+    const wall = document.getElementById('wall');
+    const wIn = ramp(t, x.wallIn, x.wallIn + 0.6);
+    const wOut = ramp(t, x.titleIn - 0.3, x.titleIn + 0.5);
+    wall.style.opacity = String(wIn * (1 - 0.7 * wOut));
+    wall.style.filter = `blur(${(7 * wOut).toFixed(2)}px)`;
+    const run = Math.max(0, t - x.wallIn);
+    const settle = Math.max(0, t - x.titleIn);
+    const off = 1450 * Math.min(run, x.titleIn - x.wallIn) + (settle > 0 ? 500 * (1 - Math.exp(-settle * 2)) : 0);
+    document.getElementById('wallpre').style.transform = `translateY(${(-off).toFixed(1)}px)`;
+    const ev = document.getElementById('evcount');
+    const eIn = ramp(t, x.countIn, x.countIn + 0.4);
+    const eOut = ramp(t, x.titleIn - 0.4, x.titleIn);
+    ev.style.opacity = String(eIn * (1 - eOut));
+    const n = Math.round(easeOut(ramp(t, x.countIn, x.countTo)) * D.events);
+    document.getElementById('evn').textContent = n.toLocaleString('en-US');
+    // the title
+    const ti = document.getElementById('ititle');
+    const tIn = easeOut(ramp(t, x.titleIn, x.titleIn + 0.7));
+    ti.style.opacity = String(tIn);
+    ti.style.transform = `translateY(${(18 * (1 - tIn)).toFixed(1)}px)`;
+    return t < x.titleIn + 2.5;
+  }
+
+  function outro(t) {
+    const x = D.marks;
+    const show = (id, at) => {
+      const u = easeOut(ramp(t, at, at + 0.55));
+      const el = document.getElementById(id);
+      el.style.opacity = String(u);
+      el.style.transform = `translateY(${(14 * (1 - u)).toFixed(1)}px)`;
+    };
+    show('r1', x.r1);
+    show('r2', x.r2);
+    show('r3', x.r3);
+    show('credits', x.credits);
+    return t < x.credits + 0.6;
+  }
+</script>
+</body>
+</html>

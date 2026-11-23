@@ -1,0 +1,8 @@
+[
+  {"cmd": "sed -i 's/PTHREAD_PRIO_NONE$/PTHREAD_PRIO_INHERIT/' brakesim.c", "pause": 0.3},
+  {"cmd": "diff -u brakesim.c.orig brakesim.c", "pause": 2.2},
+  {"cmd": "qcc -Vgcc_ntox86_64 -O2 -o brakesim brakesim.c && qnx-vm put brakesim /tmp/brakesim", "pause": 0.4},
+  {"cmd": "qnx-vm ssh 'tracelogger -w -s 5 -f /dev/shmem/fixed.kev & sleep 1; /tmp/brakesim -s 3; wait'", "timeout": 60, "pause": 1.2},
+  {"cmd": "qnx-vm get /dev/shmem/fixed.kev .", "pause": 0.4},
+  {"cmd": "latencylens report fixed.kev --deadlines brakesim.deadlines.yaml --format summary; echo \"exit status $?\"", "timeout": 60, "pause": 2.5}
+]

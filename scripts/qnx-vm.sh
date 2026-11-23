@@ -113,9 +113,9 @@ cmd_status() { if running; then echo "running (pid $(cat "$(pidfile)"))"; else e
 
 cmd_ssh() { exec ssh "${SSH_OPTS[@]}" root@127.0.0.1 "$@"; }
 
-cmd_put() { [[ $# -eq 2 ]] || die "usage: put <local> <remote>"; scp -O "${SCP_OPTS[@]}" "$1" "root@127.0.0.1:$2"; }
+cmd_put() { [[ $# -eq 2 ]] || die "usage: put <local> <remote>"; scp -q -O "${SCP_OPTS[@]}" "$1" "root@127.0.0.1:$2"; }
 
-cmd_get() { [[ $# -eq 2 ]] || die "usage: get <remote> <local>"; scp -O "${SCP_OPTS[@]}" "root@127.0.0.1:$1" "$2"; }
+cmd_get() { [[ $# -eq 2 ]] || die "usage: get <remote> <local>"; scp -q -O "${SCP_OPTS[@]}" "root@127.0.0.1:$1" "$2"; }
 
 sub="${1:-}"; shift || true
 case "$sub" in

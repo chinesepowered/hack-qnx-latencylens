@@ -1,0 +1,6 @@
+# Latency Lens deadlines for brakesim (samples/src/brakesim.c)
+threads:
+  - name: brake_ctl          # 50 Hz brake-pressure control loop
+    period: 20ms
+    deadline: 15ms
+    markers: { begin: 100, end: 101 }   # TraceEvent() job markers emitted by brakesim

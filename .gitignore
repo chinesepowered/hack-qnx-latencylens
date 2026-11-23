@@ -29,3 +29,5 @@ local/
 *.swp
 .vscode/*
 !.vscode/extensions.json
+__pycache__/
+*.pyc

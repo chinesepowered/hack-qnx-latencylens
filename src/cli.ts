@@ -20,7 +20,7 @@ const USAGE = `latencylens ${VERSION}: find why a QNX OS 8.0 real-time deadline 
 
 Usage:
   latencylens open <trace.kev> [--deadlines file.yaml] [--port 7878] [--host 127.0.0.1] [--no-open]
-  latencylens report <trace.kev> [--deadlines file.yaml] [--format md|json|text] [--fail-on deadline|any|none]
+  latencylens report <trace.kev> [--deadlines file.yaml] [--format md|json|text|summary] [--fail-on deadline|any|none]
   latencylens explain <trace.kev> [--finding id] [--deadlines file.yaml] [--save | --recorded]
   latencylens info <trace.kev>
   latencylens dump <trace.kev> [--from s] [--to s] [--limit n]

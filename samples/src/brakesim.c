@@ -24,20 +24,18 @@
  *                                         itself was late (the same rule Latency Lens applies)
  *
  * Usage: brakesim [-s seconds]     (default 3)
- * Build: qcc -Vgcc_ntox86_64 -O2 -o brakesim brakesim.c            (buggy)
- *        qcc -Vgcc_ntox86_64 -O2 -DBRAKESIM_FIXED -o brakesim brakesim.c   (fixed)
+ * Build: qcc -Vgcc_ntox86_64 -O2 -o brakesim brakesim.c       (the bug as shipped)
+ *        or fix LOG_LOCK_PROTOCOL below, or build with -DLOG_LOCK_PROTOCOL=PTHREAD_PRIO_INHERIT
  */
 #include "ll_common.h"
 
 #include <fcntl.h>
 #include <unistd.h>
 
-#ifdef BRAKESIM_FIXED
-/* Fixed: the owner of log_lock inherits the priority of the highest thread waiting for it. */
-#define LOG_LOCK_PROTOCOL PTHREAD_PRIO_INHERIT
-#else
-/* BUG: carried over from a Linux port, where PTHREAD_PRIO_NONE is the default. QNX's own default
- * would have been PTHREAD_PRIO_INHERIT. */
+/* The protocol of log_lock. BUG: this line came over from a Linux port, where PTHREAD_PRIO_NONE is
+ * the default. QNX's own default is PTHREAD_PRIO_INHERIT: the owner of the lock runs at the priority
+ * of the highest-priority thread waiting for it. Change this line to fix the sample. */
+#ifndef LOG_LOCK_PROTOCOL
 #define LOG_LOCK_PROTOCOL PTHREAD_PRIO_NONE
 #endif
 

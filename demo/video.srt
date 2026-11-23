@@ -1,0 +1,83 @@
+1
+00:00:00,450 --> 00:00:08,033
+When a real-time system on QNX misses a deadline, the kernel trace holds the answer, buried in thousands of events.
+
+2
+00:00:08,033 --> 00:00:10,011
+Latency Lens reads it for you.
+
+3
+00:00:11,217 --> 00:00:14,864
+This is a brake controller running on QNX 8.0 in QEMU.
+
+4
+00:00:14,864 --> 00:00:20,944
+Its control loop has a fifteen millisecond deadline, and it misses nearly a third of them.
+
+5
+00:00:20,944 --> 00:00:26,685
+We record a kernel trace with tracelogger, copy it to the host, and ask Latency Lens.
+
+6
+00:00:26,685 --> 00:00:29,320
+It names the problem in under a second.
+
+7
+00:00:31,783 --> 00:00:39,269
+The trace opens as a timeline: one lane per CPU and per thread, every state change, interrupt and message.
+
+8
+00:00:39,269 --> 00:00:49,155
+Latency Lens decodes the trace file itself, verified event by event against QNX's own traceprinter, and it stays smooth on a million events.
+
+9
+00:00:50,117 --> 00:00:53,972
+Pick the priority inversion and it jumps to the worst case.
+
+10
+00:00:53,972 --> 00:01:00,441
+The brake controller, priority sixty-three, is blocked on a mutex held by the logger, priority ten.
+
+11
+00:01:00,441 --> 00:01:07,107
+The logger is ready to finish, but telemetry, priority thirty, keeps the CPU for seventy milliseconds.
+
+12
+00:01:07,107 --> 00:01:11,093
+Every finding comes with the exact kernel events as evidence.
+
+13
+00:01:12,117 --> 00:01:19,836
+Explain this sends only that evidence to Qwen on Weights and Biases Inference, and gets back a cause and a fix in plain words.
+
+14
+00:01:19,836 --> 00:01:25,043
+Then code checks every thread, priority and duration in the answer against the trace.
+
+15
+00:01:25,043 --> 00:01:30,925
+When the model gets one wrong, like this logger boosted to sixty-three, the claim is struck out.
+
+16
+00:01:31,983 --> 00:01:37,299
+The fix is one line: a priority inheritance mutex, the QNX default.
+
+17
+00:01:37,299 --> 00:01:41,822
+Rebuild with qcc, capture again, and the misses are gone.
+
+18
+00:01:41,822 --> 00:01:48,963
+Latency Lens reports no findings and exits with status zero, so it can gate a CI pipeline.
+
+19
+00:01:51,017 --> 00:02:00,708
+In the new trace you can see inheritance at work: while the brake controller waits, the logger runs at priority sixty-three and typically releases the lock within two milliseconds.
+
+20
+00:02:01,883 --> 00:02:10,504
+The same deterministic detectors find interrupt threads held off by busier work, requests stuck in chains of servers, and threads that hog a core.
+
+21
+00:02:11,683 --> 00:02:19,860
+Latency Lens is open source under the AGPL, with a codelab to try it yourself on QNX 8.0 in QEMU.

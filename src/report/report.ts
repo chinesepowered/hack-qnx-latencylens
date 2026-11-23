@@ -6,7 +6,7 @@ import { fmtDur } from '../detect/util.js';
 import { describeEvent, eventLine } from '../model/format.js';
 import type { Model } from '../model/model.js';
 
-export type ReportFormat = 'md' | 'json' | 'text';
+export type ReportFormat = 'md' | 'json' | 'text' | 'summary';
 
 export function traceSummary(m: Model): string {
   const h = m.trace.header;
@@ -113,7 +113,17 @@ export function renderJson(m: Model, a: Analysis, cfg: Config, traceName: string
   );
 }
 
+/** One line per finding: for terminals and CI logs. */
+export function renderSummary(m: Model, a: Analysis, traceName: string): string {
+  const h = m.trace.header;
+  const out = [`${traceName}: ${a.findings.length ? `${a.findings.length} finding${a.findings.length === 1 ? '' : 's'}` : 'no findings'} (QNX ${h.sysRelease}, ${m.cpuCount} CPUs, ${fmtDur(m.durationNs)}, ${m.trace.events.n.toLocaleString('en-US')} events)`];
+  const w = Math.max(0, ...a.findings.map((f) => f.id.length));
+  for (const f of a.findings) out.push(`  ${f.severity.toUpperCase().padEnd(8)} ${f.id.padEnd(w)}  ${f.title}`);
+  return out.join('\n') + '\n';
+}
+
 export function render(fmt: ReportFormat, m: Model, a: Analysis, cfg: Config, traceName: string): string {
+  if (fmt === 'summary') return renderSummary(m, a, traceName);
   return fmt === 'json' ? renderJson(m, a, cfg, traceName) : fmt === 'text' ? renderText(m, a, cfg, traceName) : renderMarkdown(m, a, cfg, traceName);
 }
 

@@ -1,0 +1,43 @@
+{
+  "voice": "cgSgspJ2msm6clMCkdW9",
+  "voice_name": "Jessica",
+  "model": "eleven_multilingual_v2",
+  "scenes": [
+    {
+      "id": "intro",
+      "text": "When a real-time system on QNX misses a deadline, the kernel trace holds the answer, buried in thousands of events. Latency Lens reads it for you."
+    },
+    {
+      "id": "capture",
+      "text": "This is a brake controller running on QNX 8.0 in QEMU. Its control loop has a fifteen millisecond deadline, and it misses nearly a third of them. We record a kernel trace with tracelogger, copy it to the host, and ask Latency Lens. It names the problem in under a second."
+    },
+    {
+      "id": "timeline",
+      "text": "The trace opens as a timeline: one lane per CPU and per thread, every state change, interrupt and message. Latency Lens decodes the trace file itself, verified event by event against QNX's own traceprinter, and it stays smooth on a million events."
+    },
+    {
+      "id": "finding",
+      "text": "Pick the priority inversion and it jumps to the worst case. The brake controller, priority sixty-three, is blocked on a mutex held by the logger, priority ten. The logger is ready to finish, but telemetry, priority thirty, keeps the CPU for seventy milliseconds. Every finding comes with the exact kernel events as evidence."
+    },
+    {
+      "id": "explain",
+      "text": "Explain this sends only that evidence to Qwen on Weights and Biases Inference, and gets back a cause and a fix in plain words. Then code checks every thread, priority and duration in the answer against the trace. When the model gets one wrong, like this logger boosted to sixty-three, the claim is struck out."
+    },
+    {
+      "id": "fix",
+      "text": "The fix is one line: a priority inheritance mutex, the QNX default. Rebuild with qcc, capture again, and the misses are gone. Latency Lens reports no findings and exits with status zero, so it can gate a CI pipeline."
+    },
+    {
+      "id": "clean",
+      "text": "In the new trace you can see inheritance at work: while the brake controller waits, the logger runs at priority sixty-three and typically releases the lock within two milliseconds."
+    },
+    {
+      "id": "more",
+      "text": "The same deterministic detectors find interrupt threads held off by busier work, requests stuck in chains of servers, and threads that hog a core."
+    },
+    {
+      "id": "outro",
+      "text": "Latency Lens is open source under the AGPL, with a codelab to try it yourself on QNX 8.0 in QEMU."
+    }
+  ]
+}
