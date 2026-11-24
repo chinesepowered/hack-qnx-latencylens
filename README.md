@@ -9,7 +9,7 @@ checks every thread, priority and duration the model mentions against the trace.
 as a web UI and a CI-friendly CLI, needs no QNX installation to open a trace, and works fully without
 an API key; every trace in this repository was captured on QNX OS 8.0 in QEMU with the QNX SDP 8.0.
 
-**Demo video (2:22):** [demo/video.mp4](demo/video.mp4)
+**Demo video (2:22):** https://youtu.be/jl7NuoTHKk4 (local copy: [demo/video.mp4](demo/video.mp4))
 
 ![The priority inversion in the demo capture: brake_ctl (63) blocked on a mutex held by logger (10) while telemetry (30) runs](docs/screenshots/finding.png)
 

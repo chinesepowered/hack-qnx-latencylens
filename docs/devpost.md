@@ -6,7 +6,7 @@ Text for the QNX Global Hackathon form. Category: **Developer Tooling & Host Too
 - **Project name:** Latency Lens
 - **Tagline:** Find why a QNX real-time thread missed its deadline: a kernel trace timeline, five
   deterministic detectors, and AI explanations checked against the trace.
-- **Video:** VIDEO_URL (the file is `demo/video.mp4` in the repository, 2:22)
+- **Video:** https://youtu.be/jl7NuoTHKk4 (2:22; also `demo/video.mp4` in the repository)
 - **Codelab URL:** https://chinesepowered.github.io/hack-qnx-latencylens/
 - **Repository:** https://github.com/chinesepowered/hack-qnx-latencylens (AGPL-3.0)
 
@@ -23,7 +23,7 @@ checks every thread, priority and duration the model mentions against the trace.
 a web UI and a CI-friendly CLI, needs no QNX installation to open a trace, and works fully without an
 API key; every trace in the repository was captured on QNX OS 8.0 in QEMU with the QNX SDP 8.0.
 
-Video: VIDEO_URL
+Video: https://youtu.be/jl7NuoTHKk4
 
 ### The problem
 
