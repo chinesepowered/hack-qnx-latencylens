@@ -139,10 +139,7 @@ See the form answer below.
 
 ### Challenges
 
-- QEMU without KVM adds timer and stall noise of several milliseconds. We measured it inside the guest,
-  sized the planted problems well above it, and taught the detectors to report platform latency as such
-  instead of blaming a thread. The detectors also found three real design flaws in our first "clean"
-  baseline, which we fixed.
+
 - The `.kev` format is only partly documented, so traceprinter's output became the contract: the native
   reader is tested against it event by event, and traceprinter text is accepted as input.
 - LLM answers sound right even when a number is wrong. The claim checker turned that from a risk into a
